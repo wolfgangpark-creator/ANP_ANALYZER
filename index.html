@@ -236,7 +236,9 @@
     border-radius: 8px;
     padding: 16px 20px;
     color: #ff8787;
-    font-size: 14px;
+    font-size: 13px;
+    white-space: pre-wrap;
+    font-family: monospace;
     display: none;
   }
 
@@ -343,6 +345,14 @@
       <div class="setting-item">
         <label>1 step = ? (&#956;m)</label>
         <input type="number" id="stepUm" value="0.9817" min="0.0001" step="0.0001">
+      </div>
+      <div class="setting-item" style="border:1px solid #ff6b6b33;border-radius:8px;padding:10px;background:rgba(255,107,107,0.05);">
+        <label style="color:#ff8787;">&#177; 허용 오차 (&#956;m)</label>
+        <input type="number" id="toleranceUm" value="50" min="0" step="1"
+          style="border-color:#ff6b6b55;">
+        <div style="font-size:10px;color:#5a6070;margin-top:4px;">
+          기준: <span id="stepNominalUm">—</span> &#956;m · 초과 구간 빨간선 표시
+        </div>
       </div>
     </div>
 
@@ -518,8 +528,20 @@ function newUpload() {
   showError('');
 }
 
-// 파일 읽기
-document.getElementById('fileInput').addEventListener('change', handleFile);
+// 이송 간격 기준값 표시 업데이트
+function updateStepNominal() {
+  const sc = parseFloat(document.getElementById('stepCount').value) || 460;
+  const su = parseFloat(document.getElementById('stepUm').value) || 0.9817;
+  const nom = sc * su;
+  const el = document.getElementById('stepNominalUm');
+  if (el) el.textContent = nom.toFixed(2);
+}
+document.addEventListener('DOMContentLoaded', updateStepNominal);
+setTimeout(updateStepNominal, 0); // 즉시 실행도 추가
+['stepCount','stepUm'].forEach(id => {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener('input', updateStepNominal);
+});
 const zone = document.getElementById('uploadZone');
 zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('dragover'); });
 zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
@@ -644,10 +666,16 @@ function runAnalysis() {
   setTimeout(() => {
     try {
       const result = analyze(rawData);
+      if (!result) {
+        showError('분석 결과 없음: 데이터가 너무 적거나 정지 구간이 감지되지 않았습니다.\n샘플링 간격·속도 임계값·정지 최소 샘플 수를 확인하세요.');
+        document.getElementById('progressMsg').style.display = 'none';
+        return;
+      }
       render(result);
       document.getElementById('results').style.display = 'block';
     } catch(err) {
-      showError('분석 오류: ' + err.message);
+      showError('분석 오류: ' + err.message + '\n' + (err.stack ? err.stack.split('\n').slice(0,4).join('\n') : ''));
+      console.error(err);
     }
     document.getElementById('progressMsg').style.display = 'none';
   }, 50);
@@ -915,6 +943,45 @@ function analyze(pos) {
   // centers (시각화용, ascending) — nominals는 내림차순이므로 reverse
   const centers = [...nominals].sort((a,b) => a-b);
 
+  // ── 허용오차 초과 구간 계산 ──
+  const toleranceEl  = document.getElementById('toleranceUm');
+  const toleranceUm  = toleranceEl && toleranceEl.value !== '' ? parseFloat(toleranceEl.value) : 50;
+  const toleranceMm  = toleranceUm / 1000;
+  const nominalStepMm = stepMm;
+
+  const violationSegs = [];
+  const measSorted = [...meas].sort((a, b) => a.idxStart - b.idxStart);
+
+  // 디버그: 모든 인접 쌍 출력
+  console.group('=== 허용오차 검사 (기준: ' + (nominalStepMm*1000).toFixed(2) + ' μm ±' + toleranceUm + ' μm) ===');
+  for (let i = 0; i < measSorted.length - 1; i++) {
+    const s1 = measSorted[i], s2 = measSorted[i + 1];
+    if (s1.dir !== s2.dir) continue;
+    if (Math.abs(s1.targetIdx - s2.targetIdx) !== 1) continue;
+    const dist = Math.abs(s2.rep - s1.rep);
+    const diff = Math.abs(dist - nominalStepMm);
+    const isViol = diff > toleranceMm;
+    console.log(
+      `%c${s1.dir} T${s1.targetIdx+1}(${(s1.rep).toFixed(4)})→T${s2.targetIdx+1}(${(s2.rep).toFixed(4)})` +
+      ` | 거리=${(dist*1000).toFixed(2)}μm | 편차=${(diff*1000).toFixed(2)}μm | ${isViol ? '⚠ 초과' : '✓ 정상'}`,
+      isViol ? 'color:red;font-weight:bold' : 'color:green'
+    );
+    if (isViol) {
+      violationSegs.push({
+        tStart:   timeMs[Math.min(s1.idxEnd,    timeMs.length - 1)],
+        tEnd:     timeMs[Math.min(s2.idxStart,  timeMs.length - 1)],
+        posStart: s1.rep,
+        posEnd:   s2.rep,
+        dist:     dist * 1000,
+        nominal:  nominalStepMm * 1000,
+        diff:     diff * 1000,
+        label:    `T${s1.targetIdx+1}→T${s2.targetIdx+1} (${s1.dir})`,
+      });
+    }
+  }
+  console.log('총 위반 구간:', violationSegs.length);
+  console.groupEnd();
+
   return {
     timeMs, pos, dsData, posMin, posMax,
     stops, warmupStops, extraStops, meas, centers, nominals, stepMm, isoResults,
@@ -922,9 +989,8 @@ function analyze(pos) {
     A_up, A_down, R_up: R_upVal, R_down: R_downVal,
     Backlash_mean, Backlash_max,
     nTargets, samplingUsec, maxCycle, skipCycles,
-    t0Nominal,
-    t6Nominal,
-    overtravelNominal: t6Nominal
+    t0Nominal, t6Nominal, overtravelNominal: t6Nominal,
+    violationSegs, toleranceUm, nominalStepMm,
   };
 }
 
@@ -1228,18 +1294,155 @@ function renderChart(r) {
           const x = yLeft.right - 4;
           const isGray = (r.t0Nominal != null && Math.abs(v - r.t0Nominal) < tol) ||
                          (r.t6Nominal != null && Math.abs(v - r.t6Nominal) < tol);
-          // 기존 tick 글자 지우기 (배경색으로 덮어쓰기)
           ctx.fillStyle = '#0f1117';
           ctx.fillRect(chart.chartArea.left - yLeft.width, y - 9, yLeft.width - 4, 18);
-          // 새 색으로 다시 그리기
           ctx.fillStyle = isGray ? '#5a6070' : '#748ffc';
           const label = yLeft.ticks[i].label || '';
           if (label) ctx.fillText(label, x, y);
         });
         ctx.restore();
       }
+    }, {
+      // ── 허용오차 초과 구간 표시 ──
+      id: 'violationOverlay',
+      afterDraw(chart) {
+        if (!r.violationSegs || r.violationSegs.length === 0) return;
+        const { ctx, chartArea, scales } = chart;
+        const xScale = scales['x'];
+        const yScale = scales['y'];
+        if (!xScale || !yScale) return;
+
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(chartArea.left, chartArea.top, chartArea.width, chartArea.height);
+        ctx.clip();
+
+        // 각 seg의 픽셀 좌표 미리 계산
+        const segs = r.violationSegs.map(seg => ({
+          seg,
+          xS1: xScale.getPixelForValue(seg.tStart),
+          xS2: xScale.getPixelForValue(seg.tEnd),
+          y1:  yScale.getPixelForValue(seg.posStart),
+          y2:  yScale.getPixelForValue(seg.posEnd),
+        }));
+
+        // 겹침 그룹핑: xS1이 80px 이내 → 같은 그룹
+        const assigned = new Array(segs.length).fill(-1);
+        let gid = 0;
+        segs.forEach((s, i) => {
+          if (assigned[i] >= 0) return;
+          assigned[i] = gid;
+          segs.forEach((s2, j) => {
+            if (i !== j && assigned[j] < 0 && Math.abs(s.xS1 - s2.xS1) < 80)
+              assigned[j] = gid;
+          });
+          gid++;
+        });
+
+        // 그룹별 순서(offset index) 계산
+        const groupOrder = new Array(segs.length).fill(0);
+        const groupCount = {};
+        segs.forEach((_, i) => {
+          const g = assigned[i];
+          if (groupCount[g] === undefined) groupCount[g] = 0;
+          groupOrder[i] = groupCount[g]++;
+        });
+
+        segs.forEach((sp, idx) => {
+          const { seg, xS1, xS2, y1, y2 } = sp;
+          const yTop    = Math.min(y1, y2);
+          const yBottom = Math.max(y1, y2);
+          const armW    = 9;
+          const offset  = groupOrder[idx] * 32;
+          // 브라켓 x = 이동 구간 오른쪽 + 오프셋
+          const bx = Math.max(xS1, xS2) + 10 + offset;
+
+          // 정지점 → 브라켓 수평 연결선 (점선)
+          ctx.strokeStyle = 'rgba(255,80,80,0.45)';
+          ctx.lineWidth = 1; ctx.setLineDash([3,3]);
+          ctx.beginPath(); ctx.moveTo(xS1, y1); ctx.lineTo(bx, yTop);    ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(xS2, y2); ctx.lineTo(bx, yBottom); ctx.stroke();
+          ctx.setLineDash([]);
+
+          // 브라켓 세로선
+          ctx.strokeStyle = '#FF3333'; ctx.lineWidth = 2.5;
+          ctx.beginPath(); ctx.moveTo(bx, yTop); ctx.lineTo(bx, yBottom); ctx.stroke();
+          // 위 팔
+          ctx.beginPath(); ctx.moveTo(bx - armW, yTop);    ctx.lineTo(bx + armW, yTop);    ctx.stroke();
+          // 아래 팔
+          ctx.beginPath(); ctx.moveTo(bx - armW, yBottom); ctx.lineTo(bx + armW, yBottom); ctx.stroke();
+
+          // 정지점 원 마커
+          [{ px: xS1, py: y1 }, { px: xS2, py: y2 }].forEach(({ px, py }) => {
+            ctx.beginPath();
+            ctx.arc(px, py, 5, 0, Math.PI * 2);
+            ctx.fillStyle = '#FF3333'; ctx.fill();
+            ctx.strokeStyle = '#FF9999'; ctx.lineWidth = 1.5; ctx.stroke();
+          });
+
+          // 편차 라벨
+          const lx = bx + armW + 4;
+          const ly = (yTop + yBottom) / 2;
+          const txt = `⚠ Δ${seg.diff.toFixed(1)}μm`;
+          ctx.font = 'bold 10px Segoe UI,system-ui,sans-serif';
+          const tw = ctx.measureText(txt).width;
+          ctx.fillStyle = 'rgba(15,8,8,0.82)';
+          ctx.fillRect(lx - 1, ly - 9, tw + 7, 18);
+          ctx.fillStyle = '#FF5555';
+          ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+          ctx.fillText(txt, lx + 2, ly);
+
+          // hover 감지 영역 저장
+          sp._labelRect = { x: lx - 1, y: ly - 9, w: tw + 7, h: 18 };
+          sp._hoverText = `${seg.posStart.toFixed(4)} − ${seg.posEnd.toFixed(4)} mm\n= ${seg.dist.toFixed(1)} μm  (Δ${seg.diff.toFixed(1)} μm)`;
+        });
+
+        // chart 레퍼런스에 저장 (mousemove 핸들러에서 참조)
+        chart._violationSegs = segs;
+        ctx.restore();
+      }
     }]
   });
+
+  // ── violation hover 툴팁 ──
+  const violTooltip = (() => {
+    let el = document.getElementById('violTooltip');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'violTooltip';
+      el.style.cssText = 'position:fixed;display:none;background:#1a1a1a;border:1px solid #ff5555;' +
+        'color:#ff9999;font-size:11px;padding:6px 10px;border-radius:6px;pointer-events:none;' +
+        'white-space:pre;z-index:9999;line-height:1.6;box-shadow:0 2px 8px rgba(0,0,0,0.5);';
+      document.body.appendChild(el);
+    }
+    return el;
+  })();
+
+  const canvas = document.getElementById('posChart');
+  canvas.addEventListener('mousemove', (e) => {
+    if (!posChart || !posChart._violationSegs) { violTooltip.style.display = 'none'; return; }
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+    let found = null;
+    for (const sp of posChart._violationSegs) {
+      const lr = sp._labelRect;
+      if (lr && mx >= lr.x && mx <= lr.x + lr.w && my >= lr.y && my <= lr.y + lr.h) {
+        found = sp; break;
+      }
+    }
+    if (found) {
+      violTooltip.textContent = found._hoverText;
+      violTooltip.style.display = 'block';
+      violTooltip.style.left = (e.clientX + 14) + 'px';
+      violTooltip.style.top  = (e.clientY - 10) + 'px';
+      canvas.style.cursor = 'crosshair';
+    } else {
+      violTooltip.style.display = 'none';
+      canvas.style.cursor = '';
+    }
+  });
+  canvas.addEventListener('mouseleave', () => { violTooltip.style.display = 'none'; });
 }
 
 // ── 타겟 위치별 편차 그래프 ─────────────────────
