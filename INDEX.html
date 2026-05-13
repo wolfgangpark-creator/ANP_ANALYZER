@@ -1,0 +1,2206 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ISO 230-2 위치결정 분석기</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
+<style>
+  :root {
+    --bg: #0f1117;
+    --bg2: #1a1d27;
+    --bg3: #22263a;
+    --border: #2e3352;
+    --text: #e8eaf6;
+    --text2: #8b92b8;
+    --accent: #5c7cfa;
+    --accent2: #748ffc;
+    --up: #51cf66;
+    --down: #ff6b6b;
+    --gold: #ffd43b;
+    --radius: 10px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+  }
+  header {
+    background: var(--bg2);
+    border-bottom: 1px solid var(--border);
+    padding: 18px 32px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  header .logo {
+    width: 36px; height: 36px;
+    background: var(--accent);
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; font-weight: 700; color: white;
+  }
+  header h1 { font-size: 18px; font-weight: 600; }
+  header span { font-size: 13px; color: var(--text2); margin-left: 4px; }
+
+  .container { max-width: 1200px; margin: 0 auto; padding: 32px 24px; }
+
+  /* 업로드 존 */
+  .upload-zone {
+    border: 2px dashed var(--border);
+    border-radius: var(--radius);
+    padding: 60px 32px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: var(--bg2);
+    position: relative;
+  }
+  .upload-zone:hover, .upload-zone.dragover {
+    border-color: var(--accent);
+    background: #1e2235;
+  }
+  .upload-zone input[type=file] {
+    position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+  }
+  .upload-icon { font-size: 48px; margin-bottom: 16px; }
+  .upload-zone h2 { font-size: 18px; font-weight: 600; margin-bottom: 8px; }
+  .upload-zone p { font-size: 14px; color: var(--text2); }
+  .upload-zone .hint {
+    margin-top: 16px;
+    font-size: 12px;
+    color: var(--text2);
+    background: var(--bg3);
+    padding: 8px 16px;
+    border-radius: 6px;
+    display: inline-block;
+  }
+
+  /* 설정 패널 */
+  .settings-panel {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px 24px;
+    margin-bottom: 24px;
+    display: none;
+  }
+  .settings-panel h3 { font-size: 14px; font-weight: 600; color: var(--text2); margin-bottom: 16px; letter-spacing: 0.05em; text-transform: uppercase; }
+  .settings-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; }
+  .setting-item label { display: block; font-size: 12px; color: var(--text2); margin-bottom: 6px; }
+  .setting-item input, .setting-item select {
+    width: 100%;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    padding: 8px 12px;
+    font-size: 14px;
+  }
+  .btn-analyze {
+    margin-top: 16px;
+    padding: 10px 28px;
+    background: var(--accent);
+    border: none;
+    border-radius: 8px;
+    color: white;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.2s;
+  }
+  .btn-analyze:hover { opacity: 0.85; }
+
+  /* 결과 섹션 */
+  #results { display: none; }
+
+  /* 섹션 타이틀 */
+  .section-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text2);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 16px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  /* 그래프 카드 */
+  .chart-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 24px;
+    margin-bottom: 24px;
+  }
+  .chart-card h3 { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+  .chart-card p { font-size: 13px; color: var(--text2); margin-bottom: 20px; }
+  .chart-wrap { position: relative; width: 100%; height: 340px; }
+
+  /* 범례 */
+  .legend-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--text2);
+  }
+  .legend-dot {
+    width: 10px; height: 10px;
+    border-radius: 2px;
+    flex-shrink: 0;
+  }
+
+  /* 지표 카드 그리드 */
+  .metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+  .metric-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+  }
+  .metric-card .label {
+    font-size: 12px;
+    color: var(--text2);
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .metric-card .value {
+    font-size: 26px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+  .metric-card .unit { font-size: 13px; color: var(--text2); margin-left: 4px; }
+  .metric-card .sub { font-size: 12px; color: var(--text2); margin-top: 4px; }
+  .val-good { color: var(--up); }
+  .val-warn { color: var(--gold); }
+  .val-bad { color: var(--down); }
+
+  /* 테이블 */
+  .table-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    margin-bottom: 24px;
+  }
+  .table-card table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  .table-card th {
+    background: var(--bg3);
+    padding: 10px 14px;
+    text-align: center;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text2);
+    letter-spacing: 0.05em;
+    border-bottom: 1px solid var(--border);
+  }
+  .table-card td {
+    padding: 9px 14px;
+    text-align: center;
+    border-bottom: 1px solid var(--border);
+    font-variant-numeric: tabular-nums;
+  }
+  .table-card tr:last-child td { border-bottom: none; }
+  .table-card tr:hover td { background: var(--bg3); }
+  .td-label { text-align: left !important; font-weight: 500; color: var(--text2); }
+  .td-up { color: var(--up); }
+  .td-down { color: var(--down); }
+  .td-highlight { font-weight: 600; color: var(--accent2); }
+
+  /* 에러 메시지 */
+  .error-msg {
+    background: #2d1a1a;
+    border: 1px solid #5c2a2a;
+    border-radius: 8px;
+    padding: 16px 20px;
+    color: #ff8787;
+    font-size: 13px;
+    white-space: pre-wrap;
+    font-family: monospace;
+    display: none;
+  }
+
+  /* 진행 표시 */
+  .progress-msg {
+    text-align: center;
+    padding: 40px;
+    color: var(--text2);
+    font-size: 14px;
+    display: none;
+  }
+
+  /* 반응형 */
+  @media (max-width: 600px) {
+    .container { padding: 16px; }
+    .metrics-grid { grid-template-columns: 1fr 1fr; }
+  }
+  .metric-section-label {
+    font-size: 11px; font-weight: 700; color: var(--text2);
+    letter-spacing: 0.08em; text-transform: uppercase;
+    margin-bottom: 8px; margin-top: 4px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <!-- 로고 & 타이틀 -->
+  <div style="display:flex;align-items:center;gap:12px;">
+    <!-- 물방울 로고: 주황 원형 + 흰색 물방울 -->
+    <div style="width:40px;height:40px;background:linear-gradient(150deg,#f76707,#e8590c);border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 2px 8px rgba(247,103,7,0.4);">
+      <svg width="20" height="22" viewBox="0 0 20 22" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M10 1 C10 1 2 9.5 2 14 A8 8 0 0 0 18 14 C18 9.5 10 1 10 1Z" fill="white"/>
+      </svg>
+    </div>
+    <div>
+      <div style="display:flex;align-items:baseline;gap:5px;line-height:1;">
+        <span style="font-size:17px;font-weight:800;color:#f76707;letter-spacing:-0.3px;">NOUL</span>
+        <span style="font-size:17px;font-weight:700;color:#3CB9F2;letter-spacing:-0.3px;">A&amp;P</span><span style="font-size:17px;font-weight:700;color:#ffffff;letter-spacing:-0.3px;"> Analyzer</span>
+        <span style="font-size:11px;color:#5a6070;font-weight:400;margin-left:2px;">v3.3.09 · 2026-05-13</span>
+      </div>
+      <div id="currentFileName" style="font-size:11px;color:#5a6070;margin-top:2px;display:none;max-width:600px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></div>
+    </div>
+  </div>
+  <div style="margin-left:auto;">
+    <button id="newUploadBtn" onclick="newUpload()"
+      style="display:none;padding:8px 18px;background:transparent;border:1px solid #2e3352;
+             border-radius:8px;color:#8b92b8;font-size:13px;cursor:pointer;transition:all 0.2s;
+             display:none;align-items:center;gap:6px;"
+      onmouseover="this.style.borderColor='#00B4D8';this.style.color='#00B4D8';"
+      onmouseout="this.style.borderColor='#2e3352';this.style.color='#8b92b8';">
+      ⊠ Upload CSV
+    </button>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- 업로드 영역 -->
+  <div class="upload-zone" id="uploadZone">
+    <input type="file" id="fileInput" accept=".csv,.txt">
+    <div class="upload-icon">📂</div>
+    <h2>CSV 로그 파일을 여기에 드롭하거나 클릭하세요</h2>
+    <p>변위센서 로그 파일 (열1: 위치값 mm, 헤더 4줄 자동 건너뜀)</p>
+    <div class="hint">지원 형식: .csv · 단위 mm · 샘플링간격은 아래에서 설정</div>
+  </div>
+
+  <!-- 에러 -->
+  <div class="error-msg" id="errorMsg"></div>
+  <div class="progress-msg" id="progressMsg">⚙️ 분석 중...</div>
+
+  <!-- 설정 패널 -->
+  <div class="settings-panel" id="settingsPanel">
+    <h3>측정 설정</h3>
+    <div class="settings-grid">
+      <div class="setting-item">
+        <label>샘플링 간격 (μsec)</label>
+        <input type="number" id="samplingUsec" value="1000" min="1">
+      </div>
+      <div class="setting-item">
+        <label>헤더 행 수</label>
+        <input type="number" id="headerRows" value="4" min="0">
+      </div>
+      <div class="setting-item">
+        <label>정지 판정 시간 (ms)</label>
+        <input type="number" id="stopWindowMs" value="50" min="1" step="1">
+      </div>
+      <div class="setting-item">
+        <label>정지 판정 변화량 (μm)</label>
+        <input type="number" id="stopThresholdUm" value="100" min="0.1" step="1">
+      </div>
+      <div class="setting-item">
+        <label>속도 임계값 (mm/s)</label>
+        <input type="number" id="velThreshold" value="5" min="0.1" step="0.1">
+      </div>
+      <div class="setting-item">
+        <label>정지 최소 샘플 수</label>
+        <input type="number" id="minStopSamples" value="20" min="5">
+      </div>
+      <div class="setting-item">
+        <label>버릴 사이클 수 (워밍업)</label>
+        <input type="number" id="skipCycles" value="4" min="0">
+      </div>
+      <div class="setting-item">
+        <label>측정 사이클 수</label>
+        <input type="number" id="useCycles" value="5" min="1" max="50">
+      </div>
+      <div class="setting-item">
+        <label>이송 간격 (step)</label>
+        <input type="number" id="stepCount" value="720" min="1">
+      </div>
+      <div class="setting-item">
+        <label>1 step = ? (μm)</label>
+        <input type="number" id="stepUm" value="0.9817" min="0.0001" step="0.0001">
+      </div>
+      <div class="setting-item" style="border:1px solid #ff6b6b33;border-radius:8px;padding:10px;background:rgba(255,107,107,0.05);">
+        <label style="color:#ff8787;">± 허용 오차 (μm)</label>
+        <input type="number" id="toleranceUm" value="50" min="0" step="1" style="border-color:#ff6b6b55;">
+        <div style="font-size:10px;color:#5a6070;margin-top:4px;">
+          기준: <span id="stepNominalUm">—</span> μm · 초과 구간 빨간선 표시
+        </div>
+      </div>
+    </div>
+
+    <!-- 감지 결과 박스 -->
+    <div id="detectBox" style="display:none;margin-top:16px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:16px;">
+      <div style="font-size:12px;font-weight:700;color:#ffd43b;letter-spacing:0.06em;margin-bottom:12px;">📊 데이터 분석 결과</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;align-items:start;">
+        <div>
+          <div style="font-size:11px;color:var(--text2);margin-bottom:4px;">감지된 포인트 수</div>
+          <div id="detectedClusters" style="font-size:22px;font-weight:700;color:#74c0fc;">—</div>
+          <div style="font-size:11px;color:var(--text2);margin-top:2px;">T0 + 측정 9개 + Tn</div>
+        </div>
+        <div>
+          <div style="font-size:11px;color:var(--text2);margin-bottom:4px;">감지된 T0 위치</div>
+          <div id="detectedT0" style="font-size:18px;font-weight:600;color:#748ffc;">—</div>
+          <div style="font-size:11px;color:var(--text2);margin-top:2px;">T0 기준 460step 간격</div>
+        </div>
+        <div>
+          <div style="font-size:11px;color:var(--text2);margin-bottom:4px;">측정 사이클</div>
+          <div id="detectedCycles" style="font-size:18px;font-weight:600;color:#69db7c;">—</div>
+          <div style="font-size:11px;color:var(--text2);margin-top:2px;">버림 / 사용</div>
+        </div>
+      </div>
+      <div id="detectedNominals" style="margin-top:12px;font-size:12px;color:var(--text2);line-height:2;"></div>
+    </div>
+
+    <!-- hidden nTargets: 항상 9로 고정 (T0·Tn 제외한 11포인트 기준) -->
+    <input type="hidden" id="nTargets" value="9">
+
+    <button class="btn-analyze" onclick="runAnalysis()">▶ 분석 실행</button>
+  </div>
+
+  <!-- 결과 -->
+  <div id="results">
+
+    <!-- ① 핵심 지표 요약 (최상단) -->
+    <div id="summaryCard" style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:24px;margin-bottom:24px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+        <div style="font-size:13px;font-weight:700;color:#f76707;letter-spacing:0.06em;text-transform:uppercase;">ISO 230-2 결과 요약</div>
+        <div id="summaryFileName" style="font-size:11px;color:#5a6070;"></div>
+      </div>
+
+      <!-- 기계 전체 3대 지표 -->
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:20px;">
+        <div style="background:var(--bg3);border-radius:10px;padding:18px;border-left:3px solid #ffd43b;">
+          <div style="font-size:11px;color:#8b92b8;letter-spacing:0.05em;margin-bottom:6px;">ACCURACY (이송정도)</div>
+          <div style="display:flex;align-items:baseline;gap:4px;">
+            <span style="font-size:16px;color:#ffd43b;font-weight:600;">±</span>
+            <span id="sum_A" style="font-size:28px;font-weight:800;color:#ffd43b;">—</span>
+            <span style="font-size:13px;color:#8b92b8;">&#956;m</span>
+          </div>
+          <div style="font-size:11px;color:#5a6070;margin-top:4px;">A / 2 · 전체 위치 정확도</div>
+        </div>
+        <div style="background:var(--bg3);border-radius:10px;padding:18px;border-left:3px solid #69db7c;">
+          <div style="font-size:11px;color:#8b92b8;letter-spacing:0.05em;margin-bottom:6px;">REPEATABILITY (반복정도)</div>
+          <div style="display:flex;align-items:baseline;gap:4px;">
+            <span style="font-size:16px;color:#69db7c;font-weight:600;">±</span>
+            <span id="sum_R" style="font-size:28px;font-weight:800;color:#69db7c;">—</span>
+            <span style="font-size:13px;color:#8b92b8;">&#956;m</span>
+          </div>
+          <div style="font-size:11px;color:#5a6070;margin-top:4px;">±E/2 · 백래시+산포 포함 (스펙 표기 기준)</div>
+        </div>
+        <div style="background:var(--bg3);border-radius:10px;padding:18px;border-left:3px solid #f783ac;">
+          <div style="font-size:11px;color:#8b92b8;letter-spacing:0.05em;margin-bottom:6px;">BACKLASH (평균 백래시)</div>
+          <div style="display:flex;align-items:baseline;gap:4px;">
+            <span id="sum_B" style="font-size:28px;font-weight:800;color:#f783ac;">—</span>
+            <span style="font-size:13px;color:#8b92b8;">&#956;m</span>
+          </div>
+          <div style="font-size:11px;color:#5a6070;margin-top:4px;">최대 <span id="sum_Bmax">—</span> &#956;m</div>
+        </div>
+      </div>
+
+      <!-- 방향별 2분할 -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+        <div style="background:var(--bg3);border-radius:10px;padding:16px;border-top:2px solid #ff6b6b;">
+          <div style="font-size:12px;font-weight:700;color:#ff6b6b;margin-bottom:12px;">↓ 역방향 (Go Down)</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+            <div>
+              <div style="font-size:10px;color:#5a6070;margin-bottom:3px;">이송정도 A↓</div>
+              <div style="font-size:18px;font-weight:700;color:#ff6b6b;" id="sum_Adown">—</div>
+              <div style="font-size:10px;color:#5a6070;">&#956;m</div>
+            </div>
+            <div>
+              <div style="font-size:10px;color:#5a6070;margin-bottom:3px;">반복정도 R↓</div>
+              <div style="font-size:18px;font-weight:700;color:#ff8787;" id="sum_Rdown">—</div>
+              <div style="font-size:10px;color:#5a6070;">&#956;m</div>
+            </div>
+          </div>
+        </div>
+        <div style="background:var(--bg3);border-radius:10px;padding:16px;border-top:2px solid #74c0fc;">
+          <div style="font-size:12px;font-weight:700;color:#74c0fc;margin-bottom:12px;">↑ 정방향 (Go Up)</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+            <div>
+              <div style="font-size:10px;color:#5a6070;margin-bottom:3px;">이송정도 A↑</div>
+              <div style="font-size:18px;font-weight:700;color:#74c0fc;" id="sum_Aup">—</div>
+              <div style="font-size:10px;color:#5a6070;">&#956;m</div>
+            </div>
+            <div>
+              <div style="font-size:10px;color:#5a6070;margin-bottom:3px;">반복정도 R↑</div>
+              <div style="font-size:18px;font-weight:700;color:#4dabf7;" id="sum_Rup">—</div>
+              <div style="font-size:10px;color:#5a6070;">&#956;m</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ② 위치 시계열 그래프 -->
+    <div class="section-title">위치 시계열 그래프</div>
+    <div class="chart-card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+        <h3 style="margin:0;">위치 vs 시간</h3>
+        <button onclick="resetZoom('pos')" style="padding:5px 14px;background:transparent;border:1px solid #2e3352;border-radius:6px;color:#8b92b8;font-size:12px;cursor:pointer;">↺ 줌 초기화</button>
+      </div>
+      <p>Up(정방향 ↑) / Down(역방향 ↓) 방향별 사이클 구분 &nbsp;·&nbsp; <span style="font-size:12px;color:#8b92b8;">드래그로 확대 / 더블클릭으로 초기화</span></p>
+      <div id="legendBar" class="legend-bar"></div>
+      <div class="chart-wrap">
+        <canvas id="posChart" role="img" aria-label="위치 시계열 그래프"></canvas>
+      </div>
+    </div>
+
+    <!-- ③ 편차 그래프 -->
+    <div class="section-title">위치 편차 그래프 (ISO 230-2)</div>
+    <div class="chart-card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+        <h3 style="margin:0;">타겟 위치별 편차</h3>
+        <button onclick="resetZoom('dev')" style="padding:5px 14px;background:transparent;border:1px solid #2e3352;border-radius:6px;color:#8b92b8;font-size:12px;cursor:pointer;">↺ 줌 초기화</button>
+      </div>
+      <p>각 회차별 오차(&#956;m). 왼쪽: Go Down (역방향 ↓) &nbsp;|&nbsp; 오른쪽: Go Up (정방향 ↑) &nbsp;·&nbsp; <span style="font-size:12px;color:#8b92b8;">드래그로 확대</span></p>
+      <div style="display:flex;align-items:center;gap:16px;margin-bottom:12px;flex-wrap:wrap;">
+        <div id="devLegendBar" class="legend-bar" style="margin:0;flex:1;"></div>
+        <div id="cycleCheckboxes" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;"></div>
+      </div>
+      <div class="chart-wrap" style="height:400px;">
+        <canvas id="devChart" role="img" aria-label="타겟 위치별 편차 그래프"></canvas>
+      </div>
+    </div>
+
+    <!-- ④ 타겟별 측정값 & 계산 결과 -->
+    <div class="section-title">타겟별 상세 측정값</div>
+    <div class="table-card" id="detailTable"></div>
+
+    <div class="section-title">타겟별 ISO 230-2 계산 결과</div>
+    <div class="table-card" id="isoTable"></div>
+
+  </div>
+
+</div>
+
+<script>
+let rawData = [];
+let posChart = null;
+let devChart = null;
+
+function newUpload() {
+  rawData = [];
+  if (posChart) { posChart.destroy(); posChart = null; }
+  if (devChart) { devChart.destroy(); devChart = null; }
+  document.getElementById('results').style.display = 'none';
+  document.getElementById('settingsPanel').style.display = 'none';
+  document.getElementById('uploadZone').style.display = 'block';
+  document.getElementById('newUploadBtn').style.display = 'none';
+  document.getElementById('detectBox').style.display = 'none';
+  window._currentFileName = null;
+  const fnEl = document.getElementById('currentFileName');
+  if (fnEl) fnEl.style.display = 'none';
+  document.getElementById('fileInput').value = '';
+  showError('');
+}
+
+// 이송 간격 기준값 표시 업데이트
+function updateStepNominal() {
+  const sc = parseFloat(document.getElementById('stepCount').value) || 460;
+  const su = parseFloat(document.getElementById('stepUm').value) || 0.9817;
+  const nom = sc * su;
+  const el = document.getElementById('stepNominalUm');
+  if (el) el.textContent = nom.toFixed(2);
+}
+document.addEventListener('DOMContentLoaded', updateStepNominal);
+setTimeout(updateStepNominal, 0); // 즉시 실행도 추가
+['stepCount','stepUm'].forEach(id => {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener('input', updateStepNominal);
+});
+const zone = document.getElementById('uploadZone');
+const fileInput = document.getElementById('fileInput');
+
+// fileInput이 zone 전체를 덮고 있으므로 change 이벤트만 처리
+fileInput.addEventListener('change', e => {
+  const f = e.target.files[0];
+  if (f) { window._currentFileName = f.name; processFile(f); }
+});
+
+zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('dragover'); });
+zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
+zone.addEventListener('drop', e => {
+  e.preventDefault();
+  zone.classList.remove('dragover');
+  const f = e.dataTransfer.files[0];
+  if (f) { window._currentFileName = f.name; processFile(f); }
+});
+
+function handleFile(e) {
+  const f = e.target.files[0];
+  if (f) { window._currentFileName = f.name; processFile(f); }
+}
+
+function processFile(file) {
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const text = e.target.result;
+    parseCSV(text);
+  };
+  reader.readAsText(file);
+}
+
+function parseCSV(text) {
+  showError('');
+  const headerRows = parseInt(document.getElementById('headerRows').value) || 4;
+  const lines = text.split(/\r?\n/);
+  const data = [];
+  for (let i = headerRows; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line) continue;
+    const val = parseFloat(line.split(',')[0]);
+    if (!isNaN(val)) data.push(val);
+  }
+  if (data.length < 100) {
+    showError('데이터가 너무 적습니다. 헤더 행 수 설정을 확인하세요.');
+    return;
+  }
+  rawData = data;
+  document.getElementById('settingsPanel').style.display = 'block';
+  document.getElementById('uploadZone').style.display = 'none';
+
+  // ── 자동 감지 실행 ──
+  autoDetectTargets(data);
+  runAnalysis();
+}
+
+// ── 데이터 분석 (T0 감지 & 정보 표시) ──
+function autoDetectTargets(pos) {
+  const samplingUsec = parseFloat(document.getElementById('samplingUsec').value) || 1000;
+  const stopWindowMs    = parseFloat(document.getElementById('stopWindowMs').value) || 50;
+  const stopThresholdUm = parseFloat(document.getElementById('stopThresholdUm').value) || 5;
+  const minStopSamples  = parseInt(document.getElementById('minStopSamples').value) || 30;
+  const skipCycles = parseInt(document.getElementById('skipCycles').value) || 1;
+  const useCycles  = parseInt(document.getElementById('useCycles').value)  || 5;
+  const stepCount  = parseFloat(document.getElementById('stepCount').value) || 720;
+  const stepUm     = parseFloat(document.getElementById('stepUm').value)    || 0.9817;
+  const stepMm     = stepCount * stepUm / 1000;
+  const nTargets   = 9;
+
+  const windowSamples = Math.max(2, Math.round(stopWindowMs / (samplingUsec / 1000)));
+  const threshMm = stopThresholdUm / 1000;
+  const isStationary = new Array(pos.length).fill(false);
+  for (let i = 0; i <= pos.length - windowSamples; i++) {
+    let lo = pos[i], hi = pos[i];
+    for (let j = i+1; j < i+windowSamples; j++) {
+      if (pos[j] < lo) lo = pos[j];
+      if (pos[j] > hi) hi = pos[j];
+    }
+    if (hi - lo < threshMm) for (let j = i; j < i+windowSamples; j++) isStationary[j] = true;
+  }
+
+  const reps = [];
+  let inStop = false, stopStart = 0;
+  for (let i = 0; i <= pos.length; i++) {
+    const st = i < pos.length ? isStationary[i] : false;
+    if (st && !inStop) { inStop = true; stopStart = i; }
+    else if (!st && inStop) {
+      const len = i - stopStart;
+      if (len >= minStopSamples) {
+        const half = stopStart + Math.floor(len/2);
+        reps.push(median(pos.slice(half, i)));
+      }
+      inStop = false;
+    }
+  }
+
+  if (reps.length < 4) return;
+
+  // T0 = 최댓값 클러스터
+  const uniqueDesc = [...new Set(reps.map(r => Math.round(r*1000)/1000))].sort((a,b) => b-a);
+  let t0Boundary = Math.max(...reps) - stepMm * 0.5;
+  for (let i = 0; i < uniqueDesc.length-1; i++) {
+    if (uniqueDesc[i]-uniqueDesc[i+1] > 0.10) { t0Boundary = (uniqueDesc[i]+uniqueDesc[i+1])/2; break; }
+  }
+  const t0Cluster = reps.filter(r => r > t0Boundary);
+  const t0 = t0Cluster.length ? t0Cluster.reduce((a,b)=>a+b,0)/t0Cluster.length : Math.max(...reps);
+
+  const nominals = Array.from({length: nTargets}, (_, i) => t0 - (i+1)*stepMm);
+  const t10Calc  = t0 - (nTargets+1)*stepMm;
+
+  document.getElementById('detectBox').style.display = 'block';
+  document.getElementById('detectedClusters').textContent = nTargets + 2;
+  document.getElementById('detectedT0').textContent = t0.toFixed(4) + ' mm';
+  document.getElementById('detectedCycles').textContent = `${skipCycles}회 / ${useCycles}회`;
+
+  const nomStr = nominals.map((n, i) =>
+    `<span style="color:#748ffc">T${i+1}: ${n.toFixed(4)}</span>`
+  ).join('  ·  ');
+  document.getElementById('detectedNominals').innerHTML =
+    `<span style="color:#5a6070">T0: ${t0.toFixed(4)}</span>  ·  ${nomStr}  ·  ` +
+    `<span style="color:#5a6070">T${nTargets+1}: ${t10Calc.toFixed(4)} (T9−1step, 표시용)</span>`;
+}
+
+function showError(msg) {
+  const el = document.getElementById('errorMsg');
+  el.textContent = msg;
+  el.style.display = msg ? 'block' : 'none';
+}
+
+// ── 핵심 분석 ────────────────────────────────
+function runAnalysis() {
+  if (!rawData.length) return;
+  document.getElementById('progressMsg').style.display = 'block';
+  document.getElementById('results').style.display = 'none';
+
+  setTimeout(() => {
+    try {
+      const result = analyze(rawData);
+      if (!result) {
+        showError('분석 결과 없음: 데이터가 너무 적거나 정지 구간이 감지되지 않았습니다.\n샘플링 간격·속도 임계값·정지 최소 샘플 수를 확인하세요.');
+        document.getElementById('progressMsg').style.display = 'none';
+        return;
+      }
+      render(result);
+      document.getElementById('results').style.display = 'block';
+    } catch(err) {
+      showError('분석 오류: ' + err.message + '\n' + (err.stack ? err.stack.split('\n').slice(0,4).join('\n') : ''));
+      console.error(err);
+    }
+    document.getElementById('progressMsg').style.display = 'none';
+  }, 50);
+}
+
+function analyze(pos) {
+  const samplingUsec = parseFloat(document.getElementById('samplingUsec').value) || 500;
+  const dt = samplingUsec / 1e6;
+  const velThreshold    = parseFloat(document.getElementById('velThreshold').value)    || 5;
+  const minStopSamples  = parseInt(document.getElementById('minStopSamples').value)    || 30;
+  const stopWindowMs    = parseFloat(document.getElementById('stopWindowMs').value)    || 50;
+  const stopThresholdUm = parseFloat(document.getElementById('stopThresholdUm').value) || 5;
+  const skipCycles = parseInt(document.getElementById('skipCycles').value) || 1;
+  const useCycles  = parseInt(document.getElementById('useCycles').value)  || 5;
+  const nTargets   = 9;
+  const stepCount  = parseFloat(document.getElementById('stepCount').value) || 720;
+  const stepUm     = parseFloat(document.getElementById('stepUm').value)    || 0.9817;
+  const stepMm     = stepCount * stepUm / 1000;
+
+  const n = pos.length;
+  const timeMs = pos.map((_, i) => i * samplingUsec / 1000);
+
+  // ── 정지 감지: 슬라이딩 윈도우 방식 ──
+  // stopWindowMs 샘플 동안 max-min < stopThresholdUm/1000 이면 정지
+  const windowSamples = Math.max(2, Math.round(stopWindowMs / (samplingUsec / 1000)));
+  const threshMm = stopThresholdUm / 1000;
+  const isStationary = new Array(n).fill(false);
+
+  for (let i = 0; i <= n - windowSamples; i++) {
+    let lo = pos[i], hi = pos[i];
+    for (let j = i + 1; j < i + windowSamples; j++) {
+      if (pos[j] < lo) lo = pos[j];
+      if (pos[j] > hi) hi = pos[j];
+    }
+    if (hi - lo < threshMm) {
+      for (let j = i; j < i + windowSamples; j++) isStationary[j] = true;
+    }
+  }
+
+  // 연속 정지/이동 구간 추출
+  const groups = [];
+  let gstart = 0;
+  for (let i = 1; i <= n; i++) {
+    if (i === n || isStationary[i] !== isStationary[gstart]) {
+      groups.push({ start: gstart, end: i-1, isMoving: !isStationary[gstart] });
+      gstart = i;
+    }
+  }
+
+  // ── 방향 감지: 변위 부호 변경 ──
+  // 각 이동 구간의 변위 합산 → 부호로 up/down 결정
+  // 방향 전환 = 이전 이동 방향과 부호가 반전될 때
+  const moveDir = {};
+  groups.forEach(g => {
+    if (g.isMoving) {
+      const disp = pos[g.end] - pos[g.start];
+      moveDir[g.start] = disp > 0 ? 'up' : 'down';
+    }
+  });
+
+  // 정지 구간 대표값 및 방향 할당
+  const stops = [];
+  groups.forEach(g => {
+    if (!g.isMoving) {
+      const len = g.end - g.start + 1;
+      if (len >= minStopSamples) {
+        const halfStart = g.start + Math.floor(len / 2);
+        const rep = median(pos.slice(halfStart, g.end + 1));
+        const prevMove = groups.find(m => m.isMoving && m.end === g.start - 1);
+        const dir = prevMove ? moveDir[prevMove.start] : 'start';
+        stops.push({ rep, dir, idxStart: g.start, idxEnd: g.end, len });
+      }
+    }
+  });
+
+  // ── T0 감지: 데이터 내 가장 큰 rep (오버트래블 상단) ──
+  const repVals = stops.map(s => s.rep);
+  if (repVals.length < 4) return null;
+
+  const repMax = repVals.reduce((a, b) => Math.max(a, b), -Infinity);
+  const repMin = repVals.reduce((a, b) => Math.min(a, b),  Infinity);
+
+  // T0 클러스터 경계: 1μm unique 정렬에서 상단 첫 큰 갭(>100μm)
+  const uniqueDesc = [...new Set(repVals.map(r => Math.round(r * 1000) / 1000))].sort((a,b) => b - a);
+  const uniqueAsc  = [...uniqueDesc].reverse();
+  let t0Boundary = repMax - stepMm * 0.5;
+  for (let i = 0; i < uniqueDesc.length - 1; i++) {
+    if (uniqueDesc[i] - uniqueDesc[i+1] > 0.10) {
+      t0Boundary = (uniqueDesc[i] + uniqueDesc[i+1]) / 2;
+      break;
+    }
+  }
+
+  // T0 nominal = T0 클러스터 평균
+  const t0Cluster = repVals.filter(r => r > t0Boundary);
+  const t0Nominal = t0Cluster.length ? t0Cluster.reduce((a,b)=>a+b,0)/t0Cluster.length : repMax;
+
+  // ── nominals: T0 기준 stepMm 간격 계산값 ──
+  const nominals = Array.from({length: nTargets}, (_, i) => t0Nominal - (i+1) * stepMm);
+  // nominals[0]=T1(최대), nominals[8]=T9(최소)
+
+  // T10 경계: T9 nominal보다 stepMm×0.3 이상 아래
+  const t9Nominal = nominals[nTargets - 1];
+  const t10NominalCalc = t9Nominal - stepMm; // 기준 T10 = T9 - 1 step
+  const t10Boundary = t9Nominal - stepMm * 0.30;
+
+  // T10 nominal (터닝포인트 실측 평균)
+  const t10Cluster = repVals.filter(r => r < t10Boundary);
+  const actualBottomCluster = t10Cluster.length ? t10Cluster.reduce((a,b)=>a+b,0)/t10Cluster.length : t10NominalCalc;
+  const t6Nominal = t10NominalCalc; // 기준 T10 = T9 - stepMm
+
+  const tol = stepMm * 0.85;
+
+  // T0/T10 마킹
+  stops.forEach(s => {
+    s.targetIdx = -1; s.nominal = null; s.error = null;
+    if (s.rep > t0Boundary)  s._isT0  = true;
+    if (s.rep < t10Boundary) s._isT10 = true;
+  });
+
+  // ── Down 순차 배정 ──
+  const downStops = stops
+    .filter(s => s.dir === 'down' && !s._isT0 && !s._isT10)
+    .sort((a, b) => a.idxStart - b.idxStart);
+
+  let curDownIdx = -1;
+  let downPassAssigned = new Set();
+  let downSkipNext = false; // T9 완료 후 다음 stop이 T10 위치에 있으면 건너뜀
+  downStops.forEach(s => {
+    // T9 완료 직후: rep이 T10 위치(t9Nominal 아래)에 있는 stop만 T10으로 건너뜀
+    if (downSkipNext) {
+      downSkipNext = false;
+      if (s.rep < t9Nominal - stepMm * 0.2) {
+        s._isT10 = true; // 실제 T10 위치 → 계산 제외
+        return;
+      }
+      // T10 위치가 아니면 정상 배정 계속
+    }
+    let bestIdx = -1, bestDist = Infinity;
+    for (let ti = curDownIdx + 1; ti < nTargets; ti++) {
+      if (downPassAssigned.has(ti)) continue;
+      if (s.rep < nominals[ti] - tol) continue; // 이미 지나친 nominal 건너뜀
+      const d = Math.abs(s.rep - nominals[ti]);
+      if (d < bestDist) { bestDist = d; bestIdx = ti; }
+    }
+    if (bestIdx >= 0 && bestDist < tol) {
+      s.targetIdx = bestIdx;
+      s.nominal   = nominals[bestIdx];
+      s.error     = s.rep - s.nominal;
+      curDownIdx  = bestIdx;
+      downPassAssigned.add(bestIdx);
+      if (bestIdx === nTargets - 1) {
+        curDownIdx = -1;
+        downPassAssigned = new Set();
+        downSkipNext = true; // 다음 stop은 실제 T10
+      }
+    } else {
+      const nextNom = (curDownIdx + 1 < nTargets) ? nominals[curDownIdx + 1] : null;
+      if (nextNom !== null && s.rep < nextNom - tol) {
+        curDownIdx = -1;
+        downPassAssigned = new Set();
+        downSkipNext = false;
+      }
+    }
+  });
+
+  // ── Up 순차 배정 ──
+  const upStops = stops
+    .filter(s => s.dir === 'up' && !s._isT0 && !s._isT10)
+    .sort((a, b) => a.idxStart - b.idxStart);
+
+  let curUpIdx = nTargets;
+  let upPassAssigned = new Set();
+  upStops.forEach(s => {
+    // T0 구간 정지점은 Up 배정 불가
+    if (s.rep > t0Boundary) return;
+
+    let bestIdx = -1, bestDist = Infinity;
+    for (let ti = curUpIdx - 1; ti >= 0; ti--) {
+      if (upPassAssigned.has(ti)) continue;
+      if (s.rep > nominals[ti] + tol) continue;
+      const d = Math.abs(s.rep - nominals[ti]);
+      if (d < bestDist) { bestDist = d; bestIdx = ti; }
+    }
+    if (bestIdx >= 0 && bestDist < tol) {
+      s.targetIdx = bestIdx;
+      s.nominal   = nominals[bestIdx];
+      s.error     = s.rep - s.nominal;
+      curUpIdx    = bestIdx;
+      upPassAssigned.add(bestIdx);
+      if (bestIdx === 0) {
+        curUpIdx = nTargets;
+        upPassAssigned = new Set();
+      }
+    } else {
+      const nextNom = (curUpIdx - 1 >= 0) ? nominals[curUpIdx - 1] : null;
+      if (nextNom !== null && s.rep > nextNom + tol) {
+        curUpIdx = nTargets;
+        upPassAssigned = new Set();
+      }
+    }
+  });
+
+  const validStops = stops.filter(s => s.targetIdx >= 0 && s.dir !== 'start');
+  validStops.sort((a, b) => a.idxStart - b.idxStart);
+
+  // ── 사이클 구분: pass 기반 ──
+  // 새 패스 조건: Down은 tIdx=0(T1) 등장 시, Up은 tIdx=nTargets-1(T9) 등장 시
+  let downPassNo = 0, upPassNo = 0;
+  let inDownPass = false, inUpPass = false;
+
+  validStops.forEach(s => {
+    if (s.dir === 'down') {
+      if (s.targetIdx === 0) { downPassNo++; inDownPass = true; }
+      s.passNo = inDownPass ? downPassNo : 0;
+    } else {
+      if (s.targetIdx === nTargets - 1) { upPassNo++; inUpPass = true; }
+      s.passNo = inUpPass ? upPassNo : 0;
+    }
+  });
+
+  // ── 불완전 pass 제거 ──
+  // 완전한 Down pass: T1(idx=0)~T5(idx=nTargets-1) 모두 포함
+  // 완전한 Up pass: T5(idx=nTargets-1)~T1(idx=0) 모두 포함
+  const downPassCoverage = {};
+  const upPassCoverage = {};
+  validStops.forEach(s => {
+    if (s.dir === 'down') {
+      if (!downPassCoverage[s.passNo]) downPassCoverage[s.passNo] = new Set();
+      downPassCoverage[s.passNo].add(s.targetIdx);
+    } else {
+      if (!upPassCoverage[s.passNo]) upPassCoverage[s.passNo] = new Set();
+      upPassCoverage[s.passNo].add(s.targetIdx);
+    }
+  });
+  // 완전한 pass = 모든 nTargets개 타겟이 있는 pass
+  const completeDownPasses = new Set(
+    Object.entries(downPassCoverage)
+      .filter(([,v]) => v.size === nTargets)
+      .map(([k]) => parseInt(k))
+  );
+  const completeUpPasses = new Set(
+    Object.entries(upPassCoverage)
+      .filter(([,v]) => v.size === nTargets)
+      .map(([k]) => parseInt(k))
+  );
+
+  // 완전한 pass만 유효 측정으로 사용
+  const completeStops = validStops.filter(s => {
+    if (s.dir === 'down') return completeDownPasses.has(s.passNo);
+    return completeUpPasses.has(s.passNo);
+  });
+
+  // 웜업 제외 + 측정 사이클 수 상한 적용
+  const meas = completeStops.filter(s =>
+    s.passNo > skipCycles && s.passNo <= skipCycles + useCycles
+  );
+
+  // Down/Up 각각 독립적으로 cycleNo 1부터 재부여
+  let downCycleCounter = 0, upCycleCounter = 0;
+  // passNo 오름차순 유지 (이미 정렬됨)
+  const downPasses = [...new Set(meas.filter(s=>s.dir==='down').map(s=>s.passNo))].sort((a,b)=>a-b);
+  const upPasses   = [...new Set(meas.filter(s=>s.dir==='up').map(s=>s.passNo))].sort((a,b)=>a-b);
+  const downPassMap = Object.fromEntries(downPasses.map((p,i) => [p, i+1]));
+  const upPassMap   = Object.fromEntries(upPasses.map((p,i) => [p, i+1]));
+  meas.forEach(s => {
+    s.cycleNo = s.dir === 'down' ? downPassMap[s.passNo] : upPassMap[s.passNo];
+  });
+
+  // 웜업 구간 (시각화용)
+  const warmupStops = validStops.filter(s => s.passNo <= skipCycles);
+
+  // 범위 초과 구간 (useCycles 이후 — 회색으로 표시)
+  const extraStops = completeStops.filter(s => s.passNo > skipCycles + useCycles);
+
+  // ── ISO 230-2 계산 ──
+  const isoResults = [];
+  for (let t = 0; t < nTargets; t++) {
+    const upVals   = meas.filter(s => s.targetIdx === t && s.dir === 'up').map(s => s.rep);
+    const downVals = meas.filter(s => s.targetIdx === t && s.dir === 'down').map(s => s.rep);
+    const nom = nominals[t];
+
+    const calcStats = (vals) => {
+      if (!vals.length) return null;
+      const mean = avg(vals);
+      const meanErr = mean - nom;
+      // n=1이면 σ=0으로 처리 (단일 측정, 산포 정보 없음)
+      const sj = vals.length >= 2 ? stddev(vals) : 0;
+      return { mean, meanErr, sj, n: vals.length };
+    };
+
+    const up = calcStats(upVals);
+    const down = calcStats(downVals);
+
+    let Bj = null, Uj = null, Pj = null, Wj = null;
+    // ISO 230-2 단방향 반복정도: R↑(i) = 4σ↑,  R↓(i) = 4σ↓
+    const Rj_up   = up   ? 4 * up.sj   : null;
+    const Rj_down = down ? 4 * down.sj : null;
+    if (up && down) {
+      // B(i) = x̄↑ − x̄↓  (히스테리시스, 음수가 일반적)
+      Bj = up.meanErr - down.meanErr;
+      // Uj = (x̄↑ − x̄↓) / 2  (방향 편차 = 백래시/2)
+      Uj = Bj / 2;
+      // Pj = max(R↑(i), R↓(i))  반복정도
+      Pj = Math.max(Rj_up, Rj_down);
+      // R(i) = (x̄↓ − x̄↑) + (R↑(i) + R↓(i)) / 2  (위치결정 정밀도)
+      Wj = (down.meanErr - up.meanErr) + (Rj_up + Rj_down) / 2;
+    } else if (up)   { Pj = Rj_up; }
+    else if (down)   { Pj = Rj_down; }
+    isoResults.push({ targetIdx: t, nominal: nom, up, down, Bj, Uj, Pj, Wj, Rj_up, Rj_down });
+  }
+
+  const allUp   = isoResults.filter(r => r.up).map(r => r.up.meanErr);
+  const allDown = isoResults.filter(r => r.down).map(r => r.down.meanErr);
+
+  // ── ISO 230-2 정확한 수식 ──
+  // A↑ = max(x̄ᵢ↑ + 2σᵢ↑) − min(x̄ᵢ↑ − 2σᵢ↑)
+  const upHi  = isoResults.filter(r=>r.up).map(r => r.up.meanErr + 2*r.up.sj);
+  const upLo  = isoResults.filter(r=>r.up).map(r => r.up.meanErr - 2*r.up.sj);
+  const A_up  = upHi.length && upLo.length ? Math.max(...upHi) - Math.min(...upLo) : null;
+
+  // A↓ = max(x̄ᵢ↓ + 2σᵢ↓) − min(x̄ᵢ↓ − 2σᵢ↓)
+  const dnHi  = isoResults.filter(r=>r.down).map(r => r.down.meanErr + 2*r.down.sj);
+  const dnLo  = isoResults.filter(r=>r.down).map(r => r.down.meanErr - 2*r.down.sj);
+  const A_down = dnHi.length && dnLo.length ? Math.max(...dnHi) - Math.min(...dnLo) : null;
+
+  // 기계 A = max(x̄↑+2σ↑, x̄↓+2σ↓) − min(x̄↑−2σ↑, x̄↓−2σ↓)
+  const allHi = [...upHi, ...dnHi];
+  const allLo = [...upLo, ...dnLo];
+  const A = allHi.length && allLo.length ? Math.max(...allHi) - Math.min(...allLo) : null;
+
+  // R (반복정도) = max(4σᵢ↑, 4σᵢ↓) 전체 타겟 중 최댓값 — 산포만, 백래시 무관
+  const R_up_arr   = isoResults.filter(r => r.Rj_up   != null).map(r => r.Rj_up);
+  const R_down_arr = isoResults.filter(r => r.Rj_down != null).map(r => r.Rj_down);
+  const allRj = [...R_up_arr, ...R_down_arr];
+  const R = allRj.length ? Math.max(...allRj) : null;
+
+  // E (위치결정 정밀도) = max R(i) = max Wj — 백래시 + 산포 포함
+  const validWj = isoResults.filter(r => r.Wj !== null).map(r => r.Wj);
+  const E = validWj.length ? Math.max(...validWj) : null;
+
+  // 방향별 최대 반복정도
+  const R_upVal   = R_up_arr.length   ? Math.max(...R_up_arr)   : null;
+  const R_downVal = R_down_arr.length ? Math.max(...R_down_arr) : null;
+
+  // 백래시: B(i) = x̄ᵢ↑ − x̄ᵢ↓  (부호 있음)
+  const BiVals = isoResults.filter(r => r.Bj !== null).map(r => r.Bj); // Bj = x̄↑ − x̄↓
+  const Backlash_mean = BiVals.length ? avg(BiVals) : null;            // 평균 B̄ (부호 있음)
+  const Backlash_max  = BiVals.length ? Math.max(...BiVals.map(Math.abs)) : null; // max|B(i)|
+
+  const B_up   = allUp.length  >= 2 ? Math.max(...allUp)   - Math.min(...allUp)   : null;
+  const B_down = allDown.length >= 2 ? Math.max(...allDown) - Math.min(...allDown) : null;
+
+  const dsStep = Math.max(1, Math.floor(n / 4000));
+  const dsData = [];
+  for (let i = 0; i < n; i += dsStep) dsData.push({ t: timeMs[i], p: pos[i] });
+
+  // spread 오버플로우 방지: reduce로 min/max 계산
+  const posMin = pos.reduce((a, b) => Math.min(a, b), Infinity);
+  const posMax = pos.reduce((a, b) => Math.max(a, b), -Infinity);
+
+  const maxCycleUp   = meas.filter(s=>s.dir==='up').reduce((m,s)=>Math.max(m,s.cycleNo),0);
+  const maxCycleDown = meas.filter(s=>s.dir==='down').reduce((m,s)=>Math.max(m,s.cycleNo),0);
+  const maxCycle = Math.max(maxCycleUp, maxCycleDown);
+
+  // centers (시각화용, ascending) — nominals는 내림차순이므로 reverse
+  const centers = [...nominals].sort((a,b) => a-b);
+
+  // ── 허용오차 초과 구간 계산 ──
+  const toleranceEl  = document.getElementById('toleranceUm');
+  const toleranceUm  = toleranceEl && toleranceEl.value !== '' ? parseFloat(toleranceEl.value) : 50;
+  const toleranceMm  = toleranceUm / 1000;
+  const nominalStepMm = stepMm;
+
+  const violationSegs = [];
+  // 같은 방향 + 같은 cycleNo 내 인접 타겟만 비교
+  const measSorted = [...meas].sort((a, b) => a.idxStart - b.idxStart);
+  for (let i = 0; i < measSorted.length - 1; i++) {
+    const s1 = measSorted[i], s2 = measSorted[i + 1];
+    if (s1.dir !== s2.dir) continue;
+    if (s1.cycleNo !== s2.cycleNo) continue;                    // 같은 회차만
+    if (Math.abs(s1.targetIdx - s2.targetIdx) !== 1) continue;
+    const dist = Math.abs(s2.rep - s1.rep);
+    const diff = Math.abs(dist - nominalStepMm);
+    if (diff > toleranceMm) {
+      violationSegs.push({
+        tStart:   timeMs[Math.min(s1.idxEnd,   timeMs.length - 1)],
+        tEnd:     timeMs[Math.min(s2.idxStart, timeMs.length - 1)],
+        posStart: s1.rep,
+        posEnd:   s2.rep,
+        dist:     dist * 1000,
+        nominal:  nominalStepMm * 1000,
+        diff:     diff * 1000,
+        label:    `T${s1.targetIdx+1}→T${s2.targetIdx+1} (${s1.dir})`,
+      });
+    }
+  }
+
+  return {
+    timeMs, pos, dsData, posMin, posMax,
+    stops, warmupStops, extraStops, meas, centers, nominals, stepMm, isoResults,
+    A, E, R, B_up, B_down,
+    A_up, A_down, R_up: R_upVal, R_down: R_downVal,
+    Backlash_mean, Backlash_max,
+    nTargets, samplingUsec, maxCycle, skipCycles,
+    t0Nominal, t6Nominal, actualBottomCluster, overtravelNominal: t6Nominal,
+    violationSegs, toleranceUm, nominalStepMm,
+  };
+}
+
+// ── 렌더링 ────────────────────────────────────
+function render(r) {
+  // 감지 박스 업데이트
+  const skipEl = document.getElementById('skipCycles');
+  const dcEl   = document.getElementById('detectedCycles');
+  if (dcEl && skipEl) dcEl.textContent = `${skipEl.value}회 버림 / ${r.maxCycle}회 사용`;
+
+  // ── 핵심 지표 요약 카드 업데이트 ──
+  const fμ1 = v => v !== null && v !== undefined ? (v*1000).toFixed(1) : '—';
+  const fμ2 = v => v !== null && v !== undefined ? (v*1000).toFixed(2) : '—';
+  const set = (id, val) => { const el = document.getElementById(id); if(el) el.textContent = val; };
+
+  // 요약카드: 스펙 표기 관례 ±편측값
+  // 이송정도 표기 = ±A/2
+  const A_half = r.A !== null ? r.A / 2 : null;
+  // 반복정도(위치결정 정밀도) 표기 = ±E/2 = ±maxR(i)/2
+  const E_half = r.E !== null ? r.E / 2 : null;
+
+  set('sum_A',      fμ2(A_half));   // ±74.67
+  set('sum_R',      fμ2(E_half));   // ±63.87
+  set('sum_B',      r.Backlash_mean !== null ? (r.Backlash_mean*1000).toFixed(1) : '—');
+  set('sum_Bmax',   fμ1(r.Backlash_max));
+
+  // 방향별 (전폭값 그대로)
+  set('sum_Aup',   fμ1(r.A_up));
+  set('sum_Rup',   fμ1(r.R_up));
+  set('sum_Adown', fμ1(r.A_down));
+  set('sum_Rdown', fμ1(r.R_down));
+
+  // 파일명
+  const fnEl = document.getElementById('currentFileName');
+  const sfEl = document.getElementById('summaryFileName');
+  if (window._currentFileName) {
+    if (fnEl) { fnEl.textContent = '📄 ' + window._currentFileName; fnEl.style.display='block'; }
+    if (sfEl) sfEl.textContent = window._currentFileName;
+  }
+
+  renderChart(r);
+  renderDevChart(r);
+  renderDetailTable(r);
+  renderISOTable(r);
+  // 임시 디버그
+  if (typeof console !== 'undefined') {
+    const dn = r.meas.filter(s=>s.dir==='down');
+    const up = r.meas.filter(s=>s.dir==='up');
+    console.log('[meas] down:', dn.length, 'up:', up.length);
+    if (dn.length) console.log('[meas down[0]]', JSON.stringify({cycleNo:dn[0].cycleNo, tIdx:dn[0].targetIdx, idxStart:dn[0].idxStart, idxEnd:dn[0].idxEnd}));
+    else console.warn('[meas] DOWN EMPTY!');
+  }
+  document.getElementById('newUploadBtn').style.display = 'inline-flex';
+}
+
+// ── 통합 색상 체계 ─────────────────────────────
+// 회차별 Up(밝은 톤) / Down(진한 톤) 쌍
+const CYCLE_PALETTE = [
+  { up: '#74c0fc', down: '#1c7ed6' },  // 1회차: 하늘/진파랑
+  { up: '#69db7c', down: '#2f9e44' },  // 2회차: 연초록/진초록
+  { up: '#ffd43b', down: '#e67700' },  // 3회차: 노랑/주황
+  { up: '#f783ac', down: '#c2255c' },  // 4회차: 연핑크/진분홍
+  { up: '#a9e34b', down: '#5c940d' },  // 5회차: 연연두/진연두
+  { up: '#63e6be', down: '#099268' },  // 6회차: 민트/진민트
+  { up: '#ffa94d', down: '#d9480f' },  // 7회차: 연주황/진주황
+  { up: '#da77f2', down: '#862e9c' },  // 8회차: 연보라/진보라
+  { up: '#74c0fc', down: '#1864ab' },  // 9회차
+  { up: '#ffc9c9', down: '#c92a2a' },  // 10회차
+];
+const WARMUP_COLOR = 'rgba(120,130,160,0.3)';
+
+function getCycleColor(cycleNo, dir) {
+  const p = CYCLE_PALETTE[(cycleNo - 1) % CYCLE_PALETTE.length];
+  return dir === 'up' ? p.up : p.down;
+}
+
+// 줌 리셋
+
+// 회차 체크박스 토글
+function toggleDevCycle(cycleNo, visible) {
+  if (!devChart) return;
+  devChart.data.datasets.forEach((ds, i) => {
+    if (ds.cycleNo === cycleNo) {
+      devChart.data.datasets[i].hidden = !visible;
+    }
+  });
+  devChart.update();
+}
+
+// ── 위치 vs 시간 그래프 ───────────────────────
+function renderChart(r) {
+  if (posChart) posChart.destroy();
+
+  const dsStep = Math.max(1, Math.floor(r.pos.length / 4000));
+
+  // ── pointMap: 각 인덱스의 색상 정보 ──
+  // 방식: 정지점 구간 직접 채우기 + 이동 구간은 앞 정지점 색으로 단순 전파
+  const pointMap = new Array(r.pos.length).fill(null);
+
+  // 1) warmup 정지점
+  r.warmupStops.forEach(s => {
+    for (let i = s.idxStart; i <= s.idxEnd; i++)
+      pointMap[i] = { type: 'warmup' };
+  });
+  // 2) extra 정지점
+  r.extraStops.forEach(s => {
+    for (let i = s.idxStart; i <= s.idxEnd; i++)
+      pointMap[i] = { type: 'extra' };
+  });
+  // 3) 유효 사이클 정지점 (덮어쓰기로 우선)
+  r.meas.forEach(s => {
+    for (let i = s.idxStart; i <= s.idxEnd; i++)
+      pointMap[i] = { type: 'valid', dir: s.dir, cycleNo: s.cycleNo };
+  });
+
+  // 4) 이동 구간 전파: 앞뒤 정지점이 같은 dir+cycleNo일 때만 전파
+  //    방향 전환 구간(Down→Up, Up→Down)은 웜업(회색)으로 처리
+  // 모든 정지점을 시간순으로 정렬
+  const allStopsSorted = [
+    ...r.warmupStops.map(s => ({...s, _info: {type:'warmup'}})),
+    ...r.extraStops.map(s => ({...s, _info: {type:'extra'}})),
+    ...r.meas.map(s => ({...s, _info: {type:'valid', dir:s.dir, cycleNo:s.cycleNo}})),
+  ].sort((a, b) => a.idxStart - b.idxStart);
+
+  // 정지점들 사이 이동 구간 색 결정
+  for (let si = 0; si < allStopsSorted.length - 1; si++) {
+    const cur  = allStopsSorted[si];
+    const next = allStopsSorted[si + 1];
+    const curInfo  = cur._info;
+    const nextInfo = next._info;
+
+    // 같은 valid dir+cycleNo이면 해당 색 전파, 아니면 웜업
+    let motionInfo;
+    if (curInfo.type === 'valid' && nextInfo.type === 'valid'
+        && curInfo.dir === nextInfo.dir && curInfo.cycleNo === nextInfo.cycleNo) {
+      motionInfo = curInfo;  // 같은 사이클 내 이동 → 해당 색
+    } else {
+      motionInfo = { type: 'warmup' };  // 방향 전환 또는 다른 사이클 → 회색
+    }
+
+    for (let i = cur.idxEnd + 1; i < next.idxStart; i++) {
+      if (pointMap[i] === null) pointMap[i] = motionInfo;
+    }
+  }
+
+  // 첫 정지점 이전, 마지막 정지점 이후 → 웜업
+  if (allStopsSorted.length > 0) {
+    const warmupInfo = { type: 'warmup' };
+    for (let i = 0; i < allStopsSorted[0].idxStart; i++)
+      if (pointMap[i] === null) pointMap[i] = warmupInfo;
+    const last = allStopsSorted[allStopsSorted.length - 1];
+    for (let i = last.idxEnd + 1; i < r.pos.length; i++)
+      if (pointMap[i] === null) pointMap[i] = warmupInfo;
+  }
+
+  // ── segMap: dsStep 없이 정지점 구간은 반드시 포함 ──
+  // 이동 구간은 dsStep으로 건너뛰되, 정지점은 모두 포함
+  const segMap = {};
+
+  const addPt = (i) => {
+    const info = pointMap[i];
+    if (!info) return;
+    const key = (info.type === 'warmup' || info.type === 'extra')
+      ? 'warmup'
+      : `${info.dir}_${info.cycleNo}`;
+    if (!segMap[key]) segMap[key] = { ...info, pts: [] };
+    segMap[key].pts.push({ x: r.timeMs[i], y: r.pos[i] });
+  };
+
+  // 정지점 인덱스 집합 (빠른 검색용)
+  const stopSet = new Set();
+  [...r.warmupStops, ...r.extraStops, ...r.meas].forEach(s => {
+    for (let i = s.idxStart; i <= s.idxEnd; i++) stopSet.add(i);
+  });
+
+  for (let i = 0; i < r.pos.length; i++) {
+    if (stopSet.has(i)) {
+      addPt(i); // 정지점은 항상 포함
+    } else if (i % dsStep === 0) {
+      addPt(i); // 이동 구간은 dsStep마다
+    }
+  }
+
+
+  const datasets = [];
+  const legendItems = [];
+
+
+  const validKeys = Object.keys(segMap).filter(k => k !== 'warmup');
+  validKeys.sort((a, b) => {
+    const [aDir, aC] = a.split('_'); const [bDir, bC] = b.split('_');
+    if (aC !== bC) return parseInt(aC) - parseInt(bC);
+    return aDir === 'down' ? -1 : 1;
+  });
+  validKeys.forEach(key => {
+    const seg = segMap[key];
+    const color = getCycleColor(seg.cycleNo, seg.dir);
+    const dirLabel = seg.dir === 'up' ? '↑ Up' : '↓ Down';
+    const label = `${dirLabel} ${seg.cycleNo}회차`;
+    datasets.push({
+      label, data: seg.pts, borderColor: color,
+      borderWidth: 2, pointRadius: 0, tension: 0, parsing: false, yAxisID: 'y',
+    });
+    const existing = legendItems.find(l => l.cycleNo === seg.cycleNo);
+    if (existing) {
+      if (seg.dir === 'up') existing.colorUp = color;
+      else existing.colorDown = color;
+    } else {
+      const item = { label: `${seg.cycleNo}회차`, cycleNo: seg.cycleNo, colorUp: null, colorDown: null };
+      if (seg.dir === 'up') item.colorUp = color; else item.colorDown = color;
+      legendItems.push(item);
+    }
+  });
+
+  // 웜업은 맨 마지막(가장 아래 레이어)에 추가
+  if (segMap['warmup']) {
+    datasets.push({
+      label: '웜업',
+      data: segMap['warmup'].pts,
+      borderColor: WARMUP_COLOR, borderWidth: 1,
+      pointRadius: 0, tension: 0, parsing: false, yAxisID: 'y',
+    });
+    legendItems.unshift({ label: '웜업', colorUp: WARMUP_COLOR, colorDown: null });
+  }
+
+  // T1~T5 nominal 기준선 (파란 점선)
+  r.nominals.forEach((nom, i) => {
+    datasets.push({
+      label: `__nom_${i}`,
+      data: [{ x: r.timeMs[0], y: nom }, { x: r.timeMs[r.timeMs.length-1], y: nom }],
+      borderColor: 'rgba(92,124,250,0.2)', borderWidth: 1,
+      borderDash: [4,4], pointRadius: 0, tension: 0, parsing: false, yAxisID: 'y',
+    });
+  });
+  // T0 기준선 (위 오버트래블, 회색 점선)
+  if (r.t0Nominal != null) {
+    datasets.push({
+      label: '__nom_t0',
+      data: [{ x: r.timeMs[0], y: r.t0Nominal }, { x: r.timeMs[r.timeMs.length-1], y: r.t0Nominal }],
+      borderColor: 'rgba(90,96,112,0.35)', borderWidth: 1,
+      borderDash: [3,5], pointRadius: 0, tension: 0, parsing: false, yAxisID: 'y',
+    });
+  }
+  // T6 기준선 (아래 터닝포인트, 회색 점선)
+  if (r.t6Nominal != null) {
+    datasets.push({
+      label: '__nom_t6',
+      data: [{ x: r.timeMs[0], y: r.t6Nominal }, { x: r.timeMs[r.timeMs.length-1], y: r.t6Nominal }],
+      borderColor: 'rgba(90,96,112,0.35)', borderWidth: 1,
+      borderDash: [3,5], pointRadius: 0, tension: 0, parsing: false, yAxisID: 'y',
+    });
+  }
+
+  document.getElementById('legendBar').innerHTML = legendItems.map(item => {
+    const dots = [item.colorDown, item.colorUp].filter(Boolean).map(c =>
+      `<div style="width:10px;height:10px;border-radius:2px;background:${c};flex-shrink:0;"></div>`
+    ).join('');
+    return `<div class="legend-item">${dots}<span>${item.label}</span></div>`;
+  }).join('');
+
+  const ctx = document.getElementById('posChart').getContext('2d');
+  posChart = new Chart(ctx, {
+    type: 'line', data: { datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false, animation: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          mode: 'nearest', intersect: false,
+          filter: item => !item.dataset.label.startsWith('__') && item.dataset.label !== '웜업',
+          callbacks: {
+            title: ctxArr => {
+              const pt = ctxArr[0];
+              const tMs = pt.parsed.x;
+              const yMm = pt.parsed.y;
+              // 커서 위치 표시
+              const tStr = tMs >= 1000 ? (tMs/1000).toFixed(3)+'s' : tMs.toFixed(1)+'ms';
+              let closest = null, minD = Infinity;
+              r.meas.forEach(s => {
+                const mid = r.timeMs[Math.floor((s.idxStart + s.idxEnd) / 2)];
+                const d = Math.abs(mid - tMs);
+                if (d < minD) { minD = d; closest = s; }
+              });
+              if (closest && minD < 2000) {
+                const dir = closest.dir === 'up' ? '↑ Go Up' : '↓ Go Down';
+                return [`${dir}  T${closest.targetIdx + 1}  [${closest.cycleNo}회차]`,
+                        `위치: ${yMm.toFixed(4)} mm  |  시간: ${tStr}`];
+              }
+              return [`${pt.dataset.label}`, `위치: ${yMm.toFixed(4)} mm  |  시간: ${tStr}`];
+            },
+            label: ctxItem => {
+              const tMs = ctxItem.parsed.x;
+              let closest = null, minD = Infinity;
+              r.meas.forEach(s => {
+                const mid = r.timeMs[Math.floor((s.idxStart + s.idxEnd) / 2)];
+                const d = Math.abs(mid - tMs);
+                if (d < minD) { minD = d; closest = s; }
+              });
+              if (closest && minD < 2000 && closest.error !== null) {
+                const err = (closest.error * 1000);
+                const sign = err >= 0 ? '+' : '';
+                return `대표값: ${closest.rep.toFixed(4)} mm  |  편차: ${sign}${err.toFixed(1)} μm`;
+              }
+              return null;
+            }
+          }
+        },
+        zoom: {
+          zoom: {
+            drag: { enabled: true, backgroundColor: 'rgba(92,124,250,0.15)', borderColor: '#5c7cfa', borderWidth: 1 },
+            mode: 'xy',
+          },
+          limits: { x: { min: 'original', max: 'original' }, y: { min: 'original', max: 'original' } }
+        }
+      },
+      interaction: { mode: 'nearest', intersect: false, axis: 'x' },
+      scales: {
+        x: {
+          type: 'linear',
+          title: { display: true, text: '시간 (ms)', color: '#8b92b8' },
+          ticks: { color: '#8b92b8', maxTicksLimit: 10,
+            callback: v => v >= 1000 ? (v/1000).toFixed(1)+'s' : v+'ms' },
+          grid: { color: '#1e2235' }
+        },
+        y: {
+          position: 'right',
+          min: r.posMin - r.stepMm * 0.3,
+          max: r.posMax + r.stepMm * 0.3,
+          title: { display: true, text: '위치 (mm)', color: '#8b92b8' },
+          ticks: { color: '#8b92b8', callback: v => v.toFixed(3), maxTicksLimit: 8 },
+          grid: { color: '#1e2235' }
+        },
+        yLeft: {
+          position: 'left',
+          type: 'linear',
+          min: r.posMin - r.stepMm * 0.3,
+          max: r.posMax + r.stepMm * 0.3,
+          afterBuildTicks: axis => {
+            // T0(위 오버트래블) + T1~T5(측정) + T6(터닝포인트) 모두 tick
+            const ticks = r.nominals.map(n => ({ value: n }));
+            if (r.t0Nominal != null) ticks.push({ value: r.t0Nominal });
+            if (r.t6Nominal != null) ticks.push({ value: r.t6Nominal });
+            axis.ticks = ticks;
+          },
+          ticks: {
+            font: { size: 11, weight: '600' },
+            color: '#748ffc',
+            callback: v => {
+              const tol = r.stepMm * 0.15;
+              if (r.t0Nominal != null && Math.abs(v - r.t0Nominal) < tol)
+                return `T0  (${r.t0Nominal.toFixed(3)})`;
+              if (r.t6Nominal != null && Math.abs(v - r.t6Nominal) < tol)
+                return `T${r.nTargets+1}  (${r.t6Nominal.toFixed(3)})`;
+              const idx = r.nominals.findIndex(n => Math.abs(n - v) < tol);
+              return idx >= 0 ? `T${idx+1}  (${r.nominals[idx].toFixed(3)})` : null;
+            }
+          },
+          grid: { display: false },
+          title: { display: false },
+          border: { color: 'rgba(116,143,252,0.3)' }
+        }
+      }
+    },
+    plugins: [{
+      id: 'yLeftTickColor',
+      afterDraw(chart) {
+        const yLeft = chart.scales['yLeft'];
+        if (!yLeft) return;
+        const { ctx } = chart;
+        const tol = r.stepMm * 0.15;
+        ctx.save();
+        ctx.font = '600 11px Segoe UI, system-ui, sans-serif';
+        ctx.textAlign = 'right';
+        ctx.textBaseline = 'middle';
+        yLeft.ticks.forEach((tick, i) => {
+          const v = tick.value;
+          const y = yLeft.getPixelForValue(v);
+          const x = yLeft.right - 4;
+          const isGray = (r.t0Nominal != null && Math.abs(v - r.t0Nominal) < tol) ||
+                         (r.t6Nominal != null && Math.abs(v - r.t6Nominal) < tol);
+          ctx.fillStyle = '#0f1117';
+          ctx.fillRect(chart.chartArea.left - yLeft.width, y - 9, yLeft.width - 4, 18);
+          ctx.fillStyle = isGray ? '#5a6070' : '#748ffc';
+          const label = yLeft.ticks[i].label || '';
+          if (label) ctx.fillText(label, x, y);
+        });
+        ctx.restore();
+      }
+    }, {
+      // ── 허용오차 초과 구간 표시 ──
+      id: 'violationOverlay',
+      afterDraw(chart) {
+        if (!r.violationSegs || r.violationSegs.length === 0) return;
+        const { ctx, chartArea, scales } = chart;
+        const xScale = scales['x'];
+        const yScale = scales['y'];
+        if (!xScale || !yScale) return;
+
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(chartArea.left, chartArea.top, chartArea.width, chartArea.height);
+        ctx.clip();
+
+        // 각 seg의 픽셀 좌표 미리 계산
+        const segs = r.violationSegs.map(seg => ({
+          seg,
+          xS1: xScale.getPixelForValue(seg.tStart),
+          xS2: xScale.getPixelForValue(seg.tEnd),
+          y1:  yScale.getPixelForValue(seg.posStart),
+          y2:  yScale.getPixelForValue(seg.posEnd),
+        }));
+
+        // 겹침 그룹핑: xS1이 80px 이내 → 같은 그룹
+        const assigned = new Array(segs.length).fill(-1);
+        let gid = 0;
+        segs.forEach((s, i) => {
+          if (assigned[i] >= 0) return;
+          assigned[i] = gid;
+          segs.forEach((s2, j) => {
+            if (i !== j && assigned[j] < 0 && Math.abs(s.xS1 - s2.xS1) < 80)
+              assigned[j] = gid;
+          });
+          gid++;
+        });
+
+        // 그룹별 순서(offset index) 계산
+        const groupOrder = new Array(segs.length).fill(0);
+        const groupCount = {};
+        segs.forEach((_, i) => {
+          const g = assigned[i];
+          if (groupCount[g] === undefined) groupCount[g] = 0;
+          groupOrder[i] = groupCount[g]++;
+        });
+
+        segs.forEach((sp, idx) => {
+          const { seg, xS1, xS2, y1, y2 } = sp;
+          const yTop    = Math.min(y1, y2);
+          const yBottom = Math.max(y1, y2);
+          const armW    = 9;
+          const offset  = groupOrder[idx] * 32;
+          // 브라켓 x = 이동 구간 오른쪽 + 오프셋
+          const bx = Math.max(xS1, xS2) + 10 + offset;
+
+          // 정지점 → 브라켓 수평 연결선 (점선)
+          ctx.strokeStyle = 'rgba(255,80,80,0.45)';
+          ctx.lineWidth = 1; ctx.setLineDash([3,3]);
+          ctx.beginPath(); ctx.moveTo(xS1, y1); ctx.lineTo(bx, yTop);    ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(xS2, y2); ctx.lineTo(bx, yBottom); ctx.stroke();
+          ctx.setLineDash([]);
+
+          // 브라켓 세로선
+          ctx.strokeStyle = '#FF3333'; ctx.lineWidth = 2.5;
+          ctx.beginPath(); ctx.moveTo(bx, yTop); ctx.lineTo(bx, yBottom); ctx.stroke();
+          // 위 팔
+          ctx.beginPath(); ctx.moveTo(bx - armW, yTop);    ctx.lineTo(bx + armW, yTop);    ctx.stroke();
+          // 아래 팔
+          ctx.beginPath(); ctx.moveTo(bx - armW, yBottom); ctx.lineTo(bx + armW, yBottom); ctx.stroke();
+
+          // 정지점 원 마커
+          [{ px: xS1, py: y1 }, { px: xS2, py: y2 }].forEach(({ px, py }) => {
+            ctx.beginPath();
+            ctx.arc(px, py, 5, 0, Math.PI * 2);
+            ctx.fillStyle = '#FF3333'; ctx.fill();
+            ctx.strokeStyle = '#FF9999'; ctx.lineWidth = 1.5; ctx.stroke();
+          });
+
+          // 편차 라벨
+          const lx = bx + armW + 4;
+          const ly = (yTop + yBottom) / 2;
+          const txt = `⚠ Δ${seg.diff.toFixed(1)}μm`;
+          ctx.font = 'bold 10px Segoe UI,system-ui,sans-serif';
+          const tw = ctx.measureText(txt).width;
+          ctx.fillStyle = 'rgba(15,8,8,0.82)';
+          ctx.fillRect(lx - 1, ly - 9, tw + 7, 18);
+          ctx.fillStyle = '#FF5555';
+          ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+          ctx.fillText(txt, lx + 2, ly);
+
+          // hover 감지 영역 저장
+          sp._labelRect = { x: lx - 1, y: ly - 9, w: tw + 7, h: 18 };
+          sp._hoverText = `${seg.posStart.toFixed(4)} − ${seg.posEnd.toFixed(4)} mm\n= ${seg.dist.toFixed(1)} μm  (Δ${seg.diff.toFixed(1)} μm)`;
+        });
+
+        // chart 레퍼런스에 저장 (mousemove 핸들러에서 참조)
+        chart._violationSegs = segs;
+        ctx.restore();
+      }
+    }, {
+      // ── 정지점 마커: 그래프 색상과 동일, T번호 라벨 + 크로스하이라이트 ──
+      id: 'stopLabels',
+      afterRender(chart) {
+        const { ctx, chartArea, scales } = chart;
+        const xScale = scales['x'], yScale = scales['y'];
+        if (!xScale || !yScale || !chartArea) return;
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(chartArea.left, chartArea.top, chartArea.width, chartArea.height);
+        ctx.clip();
+        const hs = window._hoveredStop;
+        r.meas.forEach(s => {
+          const tMid = r.timeMs[Math.floor((s.idxStart + s.idxEnd) / 2)];
+          const px = xScale.getPixelForValue(tMid);
+          const py = yScale.getPixelForValue(s.rep);
+          if (px < chartArea.left || px > chartArea.right || py < chartArea.top || py > chartArea.bottom) return;
+          const color = getCycleColor(s.cycleNo, s.dir);
+          const isHighlighted = hs && hs.tIdx === s.targetIdx && hs.dir === s.dir;
+          const r2 = isHighlighted ? 7 : 4.5;
+          if (isHighlighted) {
+            ctx.beginPath();
+            ctx.arc(px, py, r2 + 3, 0, Math.PI * 2);
+            ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.setLineDash([]);
+            ctx.stroke();
+          }
+          ctx.beginPath();
+          ctx.arc(px, py, r2, 0, Math.PI * 2);
+          ctx.fillStyle = color; ctx.fill();
+          ctx.strokeStyle = 'rgba(15,17,23,0.8)'; ctx.lineWidth = 1; ctx.stroke();
+          const label = `T${s.targetIdx + 1}`;
+          const offsetY = s.dir === 'up' ? -14 : 14;
+          ctx.font = `${isHighlighted ? 'bold 10px' : 'bold 8.5px'} Segoe UI,system-ui,sans-serif`;
+          ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+          ctx.fillStyle = color;
+          ctx.fillText(label, px, py + offsetY);
+        });
+        ctx.restore();
+      }
+    }]
+  });
+
+  // ── violation hover 툴팁 ──
+  const violTooltip = (() => {
+    let el = document.getElementById('violTooltip');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'violTooltip';
+      el.style.cssText = 'position:fixed;display:none;background:#1a1a1a;border:1px solid #ff5555;' +
+        'color:#ff9999;font-size:11px;padding:6px 10px;border-radius:6px;pointer-events:none;' +
+        'white-space:pre;z-index:9999;line-height:1.6;box-shadow:0 2px 8px rgba(0,0,0,0.5);';
+      document.body.appendChild(el);
+    }
+    return el;
+  })();
+
+  const canvas = document.getElementById('posChart');
+  canvas.addEventListener('mousemove', (e) => {
+    if (!posChart || !posChart._violationSegs) { violTooltip.style.display = 'none'; return; }
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+    let found = null;
+    for (const sp of posChart._violationSegs) {
+      const lr = sp._labelRect;
+      if (lr && mx >= lr.x && mx <= lr.x + lr.w && my >= lr.y && my <= lr.y + lr.h) {
+        found = sp; break;
+      }
+    }
+    if (found) {
+      violTooltip.textContent = found._hoverText;
+      violTooltip.style.display = 'block';
+      violTooltip.style.left = (e.clientX + 14) + 'px';
+      violTooltip.style.top  = (e.clientY - 10) + 'px';
+      canvas.style.cursor = 'crosshair';
+    } else {
+      violTooltip.style.display = 'none';
+      canvas.style.cursor = '';
+    }
+  });
+  canvas.addEventListener('mouseleave', () => {
+    violTooltip.style.display = 'none';
+    window._hoveredStop = null;
+    if (devChart) devChart.update('none');
+    if (posChart) posChart.update('none');
+  });
+
+  // ── posChart 마우스로 정지점 hover 감지 → 크로스하이라이트 ──
+  canvas.addEventListener('mousemove', (e) => {
+    if (!posChart) return;
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+    const xScale = posChart.scales['x'], yScale = posChart.scales['y'];
+    if (!xScale || !yScale) return;
+    let closest = null, minDist = 20; // px threshold
+    r.meas.forEach(s => {
+      const tMid = r.timeMs[Math.floor((s.idxStart + s.idxEnd) / 2)];
+      const px = xScale.getPixelForValue(tMid);
+      const py = yScale.getPixelForValue(s.rep);
+      const dist = Math.sqrt((mx - px)**2 + (my - py)**2);
+      if (dist < minDist) { minDist = dist; closest = s; }
+    });
+    const newHover = closest ? { tIdx: closest.targetIdx, dir: closest.dir } : null;
+    const prev = window._hoveredStop;
+    if (JSON.stringify(newHover) !== JSON.stringify(prev)) {
+      window._hoveredStop = newHover;
+      if (devChart) devChart.update('none');
+      if (posChart) posChart.update('none');
+    }
+  });
+}
+
+// ── 타겟 위치별 편차 그래프 ─────────────────────
+function renderDevChart(r) {
+  if (devChart) devChart.destroy();
+
+  const nT = r.nTargets;
+  const maxCycle = r.maxCycle;
+  const ptSize = 3;
+
+  // X축: T0(Down) | T1~T9(Down) | '' | T9~T1(Up) | T10(Up)
+  const downLabels = ['D_T0', ...Array.from({length: nT}, (_, i) => `D_T${i+1}`)];
+  const upLabels   = [...Array.from({length: nT}, (_, i) => `U_T${nT-i}`), 'U_T10'];
+  const xLabels    = [...downLabels, '', ...upLabels];
+  const displayLabels = xLabels.map(l => {
+    if (l === '') return '';
+    return l.replace(/^[DU]_/, '');
+  });
+
+  // Down 순서: T0(웜업) → T1~T9(측정)
+  // Up 순서: T9~T1(측정) → T10(웜업)
+  const downOrder = Array.from({length: nT}, (_, i) => i);   // targetIdx 0~8
+  const upOrder   = Array.from({length: nT}, (_, i) => nT-1-i);
+
+  const datasets = [];
+  const legendItems = [];
+
+  // ── T0 / T10 웜업 포인트 (단일 dataset, 모든 패스 평균) ──
+  // Down 시작: T0 위치 = t0Nominal, 오차 = (warmupStop rep 평균) - t0Nominal
+  // Up 끝: T10 위치 = t6Nominal(계산값), 오차는 표시만 (터닝포인트)
+  const warmupColor = 'rgba(120,130,160,0.7)';
+
+  // T0: 모든 stops 중 dir==='down' && rep이 t0Nominal에 가장 가까운 것들의 평균 오차
+  const t0Stops = r.stops.filter(s =>
+    s.dir === 'down' && Math.abs(s.rep - r.t0Nominal) < r.stepMm * 0.5
+  );
+  const t0ErrMean = t0Stops.length
+    ? t0Stops.reduce((a, s) => a + (s.rep - r.t0Nominal) * 1000, 0) / t0Stops.length
+    : null;
+
+  // T10: 실측 터닝포인트 클러스터(actualBottomCluster) 기준으로 가까운 정지점
+  const t10Ref = r.actualBottomCluster ?? r.t6Nominal;
+  const t10Stops = r.stops.filter(s => Math.abs(s.rep - t10Ref) < r.stepMm * 1.0);
+  const t10ErrMean = t10Stops.length
+    ? t10Stops.reduce((a, s) => a + (s.rep - t10Ref) * 1000, 0) / t10Stops.length
+    : null;
+
+  // T0 포인트 (Down 시작 - T0 위치 오차)
+  datasets.push({
+    label: 'T0 (웜업)', cycleNo: null,
+    data: xLabels.map(l => l === 'D_T0'
+      ? { x: 'D_T0', y: t0ErrMean !== null ? parseFloat(t0ErrMean.toFixed(3)) : null }
+      : { x: l, y: null }),
+    borderColor: warmupColor, backgroundColor: warmupColor,
+    borderWidth: 1.5, pointRadius: ptSize+1, pointHoverRadius: ptSize+4,
+    tension: 0, spanGaps: false, showLine: false,
+    parsing: { xAxisKey: 'x', yAxisKey: 'y' },
+  });
+  // T10 포인트 (Up 끝 - 터닝포인트 위치 오차)
+  datasets.push({
+    label: 'T10 (터닝)', cycleNo: null,
+    data: xLabels.map(l => l === 'U_T10'
+      ? { x: 'U_T10', y: t10ErrMean !== null ? parseFloat(t10ErrMean.toFixed(3)) : null }
+      : { x: l, y: null }),
+    borderColor: warmupColor, backgroundColor: warmupColor,
+    borderWidth: 1.5, pointRadius: ptSize+1, pointHoverRadius: ptSize+4,
+    tension: 0, spanGaps: false, showLine: false,
+    parsing: { xAxisKey: 'x', yAxisKey: 'y' },
+  });
+
+  for (let c = 1; c <= maxCycle; c++) {
+    const colorDown = getCycleColor(c, 'down');
+    const colorUp   = getCycleColor(c, 'up');
+
+    const downPts = downOrder.map((tIdx, xi) => {
+      const s = r.meas.find(m => m.targetIdx === tIdx && m.dir === 'down' && m.cycleNo === c);
+      return { x: downLabels[xi+1], y: s ? parseFloat((s.error*1000).toFixed(3)) : null,
+               tIdx, dir: 'down' };
+    });
+    const upPts = upOrder.map((tIdx, xi) => {
+      const s = r.meas.find(m => m.targetIdx === tIdx && m.dir === 'up' && m.cycleNo === c);
+      return { x: upLabels[xi], y: s ? parseFloat((s.error*1000).toFixed(3)) : null,
+               tIdx, dir: 'up' };
+    });
+
+    datasets.push({
+      label: `↓ Down ${c}회차`, cycleNo: c,
+      data: downPts, borderColor: colorDown, backgroundColor: colorDown,
+      borderWidth: 1.5, pointRadius: ptSize, pointHoverRadius: ptSize+3,
+      tension: 0, spanGaps: false, showLine: true,
+    });
+    datasets.push({
+      label: `↑ Up ${c}회차`, cycleNo: c,
+      data: upPts, borderColor: colorUp, backgroundColor: colorUp,
+      borderWidth: 1.5, pointRadius: ptSize, pointHoverRadius: ptSize+3,
+      tension: 0, spanGaps: false, showLine: true,
+    });
+    legendItems.push({ label: `${c}회차`, cycleNo: c, colorUp, colorDown });
+  }
+
+  // 체크박스 렌더링
+  const cbContainer = document.getElementById('cycleCheckboxes');
+  if (cbContainer) {
+    cbContainer.innerHTML = legendItems.map(item => `
+      <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:12px;color:#c8d4e3;">
+        <input type="checkbox" checked data-cycle="${item.cycleNo}"
+          style="cursor:pointer;accent-color:${item.colorUp};"
+          onchange="toggleDevCycle(${item.cycleNo}, this.checked)">
+        <div style="display:flex;gap:3px;align-items:center;">
+          <span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${item.colorDown};"></span>
+          <span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${item.colorUp};"></span>
+        </div>
+        <span>${item.cycleNo}회차</span>
+      </label>`).join('');
+  }
+
+  document.getElementById('devLegendBar').innerHTML = '';
+
+  const ctx = document.getElementById('devChart').getContext('2d');
+  devChart = new Chart(ctx, {
+    type: 'line', data: { datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false, animation: false,
+      elements: { point: { radius: ptSize, hoverRadius: ptSize+3 } },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          mode: 'nearest', intersect: true,
+          callbacks: {
+            title: ctxArr => {
+              const pt = ctxArr[0].raw;
+              if (!pt) return ctxArr[0].dataset.label;
+              if (pt.tIdx !== undefined) {
+                const dir = pt.dir === 'down' ? 'Go Down ↓' : 'Go Up ↑';
+                return `${dir}  T${pt.tIdx + 1}`;
+              }
+              return ctxArr[0].dataset.label;
+            },
+            label: ctxItem => {
+              const v = ctxItem.parsed.y;
+              if (v === null || v === undefined) return '—';
+              const sign = v >= 0 ? '+' : '';
+              return `편차: ${sign}${v.toFixed(1)} μm`;
+            }
+          }
+        },
+        zoom: {
+          zoom: {
+            drag: { enabled: true, backgroundColor: 'rgba(92,124,250,0.15)', borderColor: '#5c7cfa', borderWidth: 1 },
+            mode: 'xy',
+          },
+          limits: { y: { min: 'original', max: 'original' } }
+        }
+      },
+      onHover: (event, activeEls) => {
+        if (!activeEls.length) { window._hoveredStop = null; if (posChart) posChart.update('none'); return; }
+        const pt = activeEls[0];
+        const raw = devChart.data.datasets[pt.datasetIndex].data[pt.index];
+        if (raw && raw.tIdx !== undefined) {
+          window._hoveredStop = { tIdx: raw.tIdx, dir: raw.dir };
+          if (posChart) posChart.update('none');
+        }
+      },
+      scales: {
+        x: {
+          type: 'category',
+          labels: xLabels,
+          ticks: {
+            color: '#8b92b8', maxRotation: 0, autoSkip: false, font: { size: 12 },
+            callback: (val, idx) => displayLabels[idx] || ''
+          },
+          grid: { color: '#1e2235' },
+          title: { display: true, text: 'Target Position', color: '#8b92b8' }
+        },
+        y: {
+          title: { display: true, text: 'Position differences (\u03bcm)', color: '#8b92b8' },
+          ticks: { color: '#8b92b8', callback: v => (v>=0?'+':'') + v.toFixed(1) },
+          grid: { color: '#1e2235' }
+        }
+      }
+    },
+    plugins: [{
+      id: 'splitLine',
+      afterDraw(chart) {
+        const { ctx, chartArea, scales } = chart;
+        const xScale = scales.x;
+        const splitPx = xScale.getPixelForValue(nT + 1);
+        if (splitPx < chartArea.left || splitPx > chartArea.right) return;
+        ctx.save();
+        ctx.setLineDash([6, 4]);
+        ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(splitPx, chartArea.top);
+        ctx.lineTo(splitPx, chartArea.bottom);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.font = '13px Segoe UI, system-ui, sans-serif';
+        ctx.fillStyle = 'rgba(255,255,255,0.5)';
+        ctx.textAlign = 'center';
+        const downMid = xScale.getPixelForValue(Math.floor(nT / 2));
+        const upMid   = xScale.getPixelForValue(nT + 2 + Math.floor(nT / 2));
+        ctx.fillText('Go Down ↓', downMid, chartArea.top + 16);
+        ctx.fillText('Go Up ↑',   upMid,   chartArea.top + 16);
+        ctx.restore();
+      }
+    }, {
+      id: 'devHighlight',
+      afterDraw(chart) {
+        const hs = window._hoveredStop;
+        if (!hs) return;
+        const { ctx, chartArea, scales } = chart;
+        const xScale = scales.x, yScale = scales.y;
+        // 해당 tIdx+dir의 모든 회차 포인트 하이라이트
+        chart.data.datasets.forEach((ds, di) => {
+          if (!ds.cycleNo) return;
+          ds.data.forEach((pt, pi) => {
+            if (!pt || pt.tIdx !== hs.tIdx || pt.dir !== hs.dir) return;
+            if (pt.y === null || pt.y === undefined) return;
+            const xPx = xScale.getPixelForValue(pt.x);
+            const yPx = yScale.getPixelForValue(pt.y);
+            ctx.save();
+            ctx.beginPath();
+            ctx.arc(xPx, yPx, 8, 0, Math.PI * 2);
+            ctx.strokeStyle = ds.borderColor;
+            ctx.lineWidth = 2.5;
+            ctx.stroke();
+            ctx.restore();
+          });
+        });
+      }
+    }]
+  });
+}
+
+function renderMetrics(r) {
+  const fμ = v => v !== null && v !== undefined ? (v * 1000).toFixed(1) : '—';
+
+  // 색 등급
+  const gradeA = v => v === null ? '' : v*1000 < 5 ? 'val-good' : v*1000 < 20 ? 'val-warn' : 'val-bad';
+  const gradeR = v => v === null ? '' : v*1000 < 3 ? 'val-good' : v*1000 < 10 ? 'val-warn' : 'val-bad';
+
+  const html = `
+  <!-- 전체 양방향 -->
+  <div class="metric-section-label">▪ 양방향 종합</div>
+  <div class="metrics-grid" style="margin-bottom:8px;">
+    <div class="metric-card">
+      <div class="label">이송 정도 A</div>
+      <div class="value ${gradeA(r.A)}">${fμ(r.A)}<span class="unit">μm</span></div>
+      <div class="sub">max(x̄+2σ) − min(x̄−2σ) 양방향</div>
+    </div>
+    <div class="metric-card">
+      <div class="label">반복 정도 R</div>
+      <div class="value ${gradeR(r.R)}">${fμ(r.R)}<span class="unit">μm</span></div>
+      <div class="sub">max(4σ↑, 4σ↓) — 산포만, 백래시 제외</div>
+    </div>
+    <div class="metric-card">
+      <div class="label">유효 측정 포인트</div>
+      <div class="value">${r.meas.length}<span class="unit">개</span></div>
+      <div class="sub">타겟 ${r.nTargets}개 × 사이클</div>
+    </div>
+    <div class="metric-card">
+      <div class="label">총 측정 시간</div>
+      <div class="value">${(r.pos.length * r.samplingUsec / 1e6).toFixed(2)}<span class="unit">sec</span></div>
+      <div class="sub">${r.pos.length.toLocaleString()} samples</div>
+    </div>
+  </div>
+
+  <!-- Up / Down 방향별 -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:8px;">
+
+    <div style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:16px;">
+      <div style="font-size:12px;font-weight:700;color:#74c0fc;margin-bottom:12px;letter-spacing:0.06em;">
+        ↑ Go Up (정방향)
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div>
+          <div class="label">이송 정도 A↑</div>
+          <div class="value ${gradeA(r.A_up)}" style="font-size:22px;">${fμ(r.A_up)}<span class="unit">μm</span></div>
+          <div class="sub">Up 평균편차 범위</div>
+        </div>
+        <div>
+          <div class="label">반복 정도 R↑</div>
+          <div class="value ${gradeR(r.R_up)}" style="font-size:22px;">${fμ(r.R_up)}<span class="unit">μm</span></div>
+          <div class="sub">Up 최대 반복정도</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:16px;">
+      <div style="font-size:12px;font-weight:700;color:#1c7ed6;margin-bottom:12px;letter-spacing:0.06em;">
+        ↓ Go Down (역방향)
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div>
+          <div class="label">이송 정도 A↓</div>
+          <div class="value ${gradeA(r.A_down)}" style="font-size:22px;">${fμ(r.A_down)}<span class="unit">μm</span></div>
+          <div class="sub">Down 평균편차 범위</div>
+        </div>
+        <div>
+          <div class="label">반복 정도 R↓</div>
+          <div class="value ${gradeR(r.R_down)}" style="font-size:22px;">${fμ(r.R_down)}<span class="unit">μm</span></div>
+          <div class="sub">Down 최대 반복정도</div>
+        </div>
+      </div>
+    </div>
+
+  </div>`;
+
+  document.getElementById('metricsGrid').innerHTML = html;
+}
+
+// ── 위치-위치 그래프 ──────────────────────────
+function resetZoom(chartId) {
+  if (chartId === 'pos'  && posChart)  posChart.resetZoom();
+  if (chartId === 'dev'  && devChart)  devChart.resetZoom();
+}
+
+function renderDetailTable(r) {
+  const maxCycleUp = Math.max(...r.meas.filter(s=>s.dir==='up').map(s=>s.cycleNo), 0);
+  const maxCycleDown = Math.max(...r.meas.filter(s=>s.dir==='down').map(s=>s.cycleNo), 0);
+
+  // 행: 1회Up, 1회Down, 2회Up, 2회Down...
+  const rows = [];
+  const maxC = Math.max(maxCycleUp, maxCycleDown);
+  for (let c = 1; c <= maxC; c++) {
+    for (const dir of ['up','down']) {
+      const hasAny = r.meas.some(s => s.dir === dir && s.cycleNo === c);
+      if (hasAny) rows.push({ cycle: c, dir });
+    }
+  }
+
+  const targets = r.isoResults.map((ir, i) => `T${i+1}<br><small>${ir.nominal.toFixed(3)}</small>`);
+
+  const headerRow = `<tr>
+    <th>방향</th>
+    <th>회차</th>
+    ${targets.map(t => `<th>${t}</th>`).join('')}
+  </tr>`;
+
+  const dataRows = rows.map(row => {
+    const cells = r.isoResults.map(ir => {
+      const s = r.meas.find(m => m.targetIdx === ir.targetIdx && m.dir === row.dir && m.cycleNo === row.cycle);
+      if (!s) return `<td style="color:#3a3f60">—</td>`;
+      const err = s.error * 1000; // &#956;m
+      const cls = row.dir === 'up' ? 'td-up' : 'td-down';
+      return `<td class="${cls}">${err >= 0 ? '+' : ''}${err.toFixed(1)}</td>`;
+    });
+    const dirLabel = row.dir === 'up'
+      ? `<span class="td-up">↑ Up</span>`
+      : `<span class="td-down">↓ Down</span>`;
+    return `<tr>
+      <td class="td-label">${dirLabel}</td>
+      <td>${row.cycle}회</td>
+      ${cells.join('')}
+    </tr>`;
+  });
+
+  document.getElementById('detailTable').innerHTML = `
+    <table>
+      <thead>${headerRow}</thead>
+      <tbody>${dataRows.join('')}</tbody>
+    </table>
+  `;
+}
+
+function renderISOTable(r) {
+  const f1 = v => v !== null && v !== undefined ? (v*1000).toFixed(3) : '—';
+  const fSign = v => v !== null && v !== undefined ? (v >= 0 ? '+' : '') + (v*1000).toFixed(3) : '—';
+  const fAbs = v => v !== null && v !== undefined ? Math.abs(v*1000).toFixed(3) : '—';
+
+  // 최대/최솟값 강조용
+  const allWj  = r.isoResults.filter(x => x.Wj  !== null).map(x => x.Wj);
+  const allPj  = r.isoResults.filter(x => x.Pj  !== null).map(x => x.Pj);
+  const allRup = r.isoResults.filter(x => x.Rj_up  !== null).map(x => x.Rj_up);
+  const allRdn = r.isoResults.filter(x => x.Rj_down !== null).map(x => x.Rj_down);
+  const maxWj  = allWj.length  ? Math.max(...allWj)  : null;
+  const maxPj  = allPj.length  ? Math.max(...allPj)  : null;
+  const maxRup = allRup.length ? Math.max(...allRup) : null;
+  const maxRdn = allRdn.length ? Math.max(...allRdn) : null;
+
+  const headerRow = `
+  <tr>
+    <th rowspan="2">위치</th>
+    <th rowspan="2">x̄↑<br><small>(&#956;m)</small></th>
+    <th rowspan="2">x̄↓<br><small>(&#956;m)</small></th>
+    <th rowspan="2">s↑<br><small>(&#956;m)</small></th>
+    <th rowspan="2">s↓<br><small>(&#956;m)</small></th>
+    <th rowspan="2" style="color:#8b92b8;">n↑/n↓</th>
+    <th rowspan="2" style="color:#74c0fc;">R↑(i)<br><small>(&#956;m)</small></th>
+    <th rowspan="2" style="color:#ff6b6b;">R↓(i)<br><small>(&#956;m)</small></th>
+    <th rowspan="2" style="color:#f783ac;">B(i)<br><small>(&#956;m)</small></th>
+  </tr><tr></tr>`;
+
+  const dataRows = r.isoResults.map((ir, i) => {
+    const u = ir.up, d = ir.down;
+    const isMaxRup = ir.Rj_up  !== null && Math.abs(ir.Rj_up - maxRup) < 1e-9;
+    const isMaxRdn = ir.Rj_down!== null && Math.abs(ir.Rj_down - maxRdn) < 1e-9;
+    const rupStyle = isMaxRup ? 'color:#74c0fc;font-weight:700;' : 'color:#74c0fc;';
+    const rdnStyle = isMaxRdn ? 'color:#ff6b6b;font-weight:700;' : 'color:#ff6b6b;';
+    const bjAbs = ir.Bj !== null ? Math.abs(ir.Bj) : 0;
+    const isMaxBj = bjAbs > 0 && r.isoResults.every(x => x.Bj === null || Math.abs(x.Bj) <= bjAbs + 1e-9);
+    const bjStyle = isMaxBj ? 'color:#f783ac;font-weight:700;' : 'color:#f783ac;';
+
+    // n이 1이면 σ=0이므로 경고 표시
+    const nUp = u ? u.n : 0;
+    const nDn = d ? d.n : 0;
+    const nWarn = (nUp < 2 || nDn < 2) ? ' title="n<2: σ신뢰도 낮음" style="color:#ffd43b;"' : '';
+
+    return `<tr>
+      <td class="td-label">T${i+1}<br><small style="color:#5a6070;">${ir.nominal.toFixed(3)}</small></td>
+      <td class="td-up">${u ? fSign(u.meanErr) : '—'}</td>
+      <td class="td-down">${d ? fSign(d.meanErr) : '—'}</td>
+      <td class="td-up">${u ? f1(u.sj) + (nUp<2?'*':'') : '—'}</td>
+      <td class="td-down">${d ? f1(d.sj) + (nDn<2?'*':'') : '—'}</td>
+      <td${nWarn}>${nUp}/${nDn}</td>
+      <td style="${rupStyle}">${ir.Rj_up !== null ? f1(ir.Rj_up) : '—'}</td>
+      <td style="${rdnStyle}">${ir.Rj_down !== null ? f1(ir.Rj_down) : '—'}</td>
+      <td style="${bjStyle}">${ir.Bj !== null ? fSign(ir.Bj) : '—'}</td>
+    </tr>`;
+  });
+
+  // 전체 요약 행
+  const fμ = (v, decimals=1) => v !== null && v !== undefined ? (v*1000).toFixed(decimals) : '—';
+  const sumRow = `
+  <tr style="background:#0f1117;font-weight:700;border-top:2px solid #2e3352;">
+    <td class="td-label" style="color:#ffd43b;">전체</td>
+    <td class="td-up"  title="A↑">${fμ(r.A_up)}</td>
+    <td class="td-down" title="A↓">${fμ(r.A_down)}</td>
+    <td colspan="2" style="color:#8b92b8;font-size:11px;text-align:center;">이송정도</td>
+    <td style="color:#74c0fc;" title="R↑ 최대">${fμ(r.R_up)}</td>
+    <td style="color:#ff6b6b;" title="R↓ 최대">${fμ(r.R_down)}</td>
+    <td style="color:#f783ac;" title="백래시 평균">${fμ(r.Backlash_mean)}</td>
+  </tr>`;
+
+
+  document.getElementById('isoTable').innerHTML = `
+    <div style="padding:16px 16px 0;font-size:13px;font-weight:600;color:#8b92b8;">기계 정밀도 분석 결과 (단위: &#956;m)</div>
+    <table>
+      <thead>${headerRow}</thead>
+      <tbody>${dataRows.join('')}${sumRow}</tbody>
+    </table>
+    <div style="padding:8px 14px 0;font-size:11px;color:#5a6070;">
+      x̄↑: Up 평균편차 · x̄↓: Down 평균편차 · s: 표준편차 · R↑(i)=4s↑ · R↓(i)=4s↓ · R(i)=(x̄↓−x̄↑)+(R↑+R↓)/2 · B(i)=x̄↑−x̄↓
+    </div>
+
+    <!-- 기계 전체 종합 카드 (이미지2 스타일, E 제외) -->
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;padding:16px;">
+      <div style="background:#0f1117;border:1px solid #2e3352;border-radius:8px;padding:16px;">
+        <div style="font-size:11px;color:#8b92b8;margin-bottom:6px;">이송정도 A</div>
+        <div style="font-size:22px;font-weight:700;color:${r.A*1000<50?'#51cf66':r.A*1000<150?'#ffd43b':'#ff6b6b'}">${fμ(r.A,1)} <span style="font-size:12px;font-weight:400;color:#5a6070;">&#956;m</span></div>
+        <div style="font-size:11px;color:#5a6070;margin-top:4px;">max(x̄±2σ)↑↓ − min(x̄±2σ)↑↓</div>
+      </div>
+      <div style="background:#0f1117;border:1px solid #2e3352;border-radius:8px;padding:16px;">
+        <div style="font-size:11px;color:#8b92b8;margin-bottom:6px;">반복정도 R</div>
+        <div style="font-size:22px;font-weight:700;color:${r.E*1000<50?'#51cf66':r.E*1000<150?'#ffd43b':'#ff6b6b'}">${fμ(r.E,1)} <span style="font-size:12px;font-weight:400;color:#5a6070;">&#956;m</span></div>
+        <div style="font-size:11px;color:#5a6070;margin-top:4px;">max R(i) = E, 백래시+산포 포함</div>
+      </div>
+      <div style="background:#0f1117;border:1px solid #2e3352;border-radius:8px;padding:16px;">
+        <div style="font-size:11px;color:#8b92b8;margin-bottom:6px;">백래시 (평균)</div>
+        <div style="font-size:22px;font-weight:700;color:#f783ac">${fμ(r.Backlash_mean,1)} <span style="font-size:12px;font-weight:400;color:#5a6070;">&#956;m</span></div>
+        <div style="font-size:11px;color:#5a6070;margin-top:4px;">mean(B(i)) = mean(x̄↑−x̄↓)</div>
+      </div>
+      <div style="background:#0f1117;border:1px solid #2e3352;border-radius:8px;padding:16px;">
+        <div style="font-size:11px;color:#8b92b8;margin-bottom:6px;">최대 백래시 B<sub>max</sub></div>
+        <div style="font-size:22px;font-weight:700;color:#f783ac">${fμ(r.Backlash_max,1)} <span style="font-size:12px;font-weight:400;color:#5a6070;">&#956;m</span></div>
+        <div style="font-size:11px;color:#5a6070;margin-top:4px;">max|B(i)| = max|x̄↑−x̄↓|</div>
+      </div>
+    </div>
+  `;
+}
+
+// ── 수학 유틸 ──────────────────────────────────
+function median(arr) {
+  const s = [...arr].sort((a,b) => a-b);
+  const m = Math.floor(s.length/2);
+  return s.length % 2 ? s[m] : (s[m-1]+s[m])/2;
+}
+function avg(arr) { return arr.reduce((a,b)=>a+b,0)/arr.length; }
+function stddev(arr) {
+  if (arr.length < 2) return 0;
+  const m = avg(arr);
+  return Math.sqrt(arr.reduce((a,b)=>a+(b-m)**2,0)/(arr.length-1));
+}
+
+function kMeans(data, k, maxIter=100) {
+  // 초기값: 균등 분포
+  const sorted = [...data].sort((a,b)=>a-b);
+  let centers = Array.from({length:k}, (_,i) =>
+    sorted[Math.floor(i * (sorted.length-1) / (k-1))]);
+
+  for (let iter = 0; iter < maxIter; iter++) {
+    // 할당
+    const clusters = Array.from({length:k}, ()=>[]);
+    data.forEach(v => {
+      const idx = centers.map(c=>Math.abs(v-c)).reduce((mi,d,i,arr)=>d<arr[mi]?i:mi,0);
+      clusters[idx].push(v);
+    });
+    // 갱신
+    const newCenters = clusters.map((cl,i) => cl.length ? avg(cl) : centers[i]);
+    if (newCenters.every((c,i)=>Math.abs(c-centers[i])<1e-8)) break;
+    centers = newCenters;
+  }
+  return centers.sort((a,b)=>a-b);
+}
+</script>
+</body>
+</html>
