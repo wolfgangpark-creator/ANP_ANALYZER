@@ -278,7 +278,7 @@
       <div style="display:flex;align-items:baseline;gap:5px;line-height:1;">
         <span style="font-size:17px;font-weight:800;color:#f76707;letter-spacing:-0.3px;">NOUL</span>
         <span style="font-size:17px;font-weight:700;color:#3CB9F2;letter-spacing:-0.3px;">A&amp;P</span><span style="font-size:17px;font-weight:700;color:#ffffff;letter-spacing:-0.3px;"> Analyzer</span>
-        <span style="font-size:11px;color:#5a6070;font-weight:400;margin-left:2px;">v2.0 · 2025-05-04</span>
+        <span style="font-size:11px;color:#5a6070;font-weight:400;margin-left:2px;">v3.3.08 · 2026-05-13</span>
       </div>
       <div id="currentFileName" style="font-size:11px;color:#5a6070;margin-top:2px;display:none;max-width:600px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></div>
     </div>
@@ -323,16 +323,24 @@
         <input type="number" id="headerRows" value="4" min="0">
       </div>
       <div class="setting-item">
+        <label>정지 판정 시간 (ms)</label>
+        <input type="number" id="stopWindowMs" value="50" min="1" step="1">
+      </div>
+      <div class="setting-item">
+        <label>정지 판정 변화량 (μm)</label>
+        <input type="number" id="stopThresholdUm" value="100" min="0.1" step="1">
+      </div>
+      <div class="setting-item">
         <label>속도 임계값 (mm/s)</label>
         <input type="number" id="velThreshold" value="5" min="0.1" step="0.1">
       </div>
       <div class="setting-item">
         <label>정지 최소 샘플 수</label>
-        <input type="number" id="minStopSamples" value="30" min="5">
+        <input type="number" id="minStopSamples" value="20" min="5">
       </div>
       <div class="setting-item">
         <label>버릴 사이클 수 (워밍업)</label>
-        <input type="number" id="skipCycles" value="1" min="0">
+        <input type="number" id="skipCycles" value="4" min="0">
       </div>
       <div class="setting-item">
         <label>측정 사이클 수</label>
@@ -340,18 +348,17 @@
       </div>
       <div class="setting-item">
         <label>이송 간격 (step)</label>
-        <input type="number" id="stepCount" value="460" min="1">
+        <input type="number" id="stepCount" value="720" min="1">
       </div>
       <div class="setting-item">
-        <label>1 step = ? (&#956;m)</label>
+        <label>1 step = ? (μm)</label>
         <input type="number" id="stepUm" value="0.9817" min="0.0001" step="0.0001">
       </div>
       <div class="setting-item" style="border:1px solid #ff6b6b33;border-radius:8px;padding:10px;background:rgba(255,107,107,0.05);">
-        <label style="color:#ff8787;">&#177; 허용 오차 (&#956;m)</label>
-        <input type="number" id="toleranceUm" value="50" min="0" step="1"
-          style="border-color:#ff6b6b55;">
+        <label style="color:#ff8787;">± 허용 오차 (μm)</label>
+        <input type="number" id="toleranceUm" value="50" min="0" step="1" style="border-color:#ff6b6b55;">
         <div style="font-size:10px;color:#5a6070;margin-top:4px;">
-          기준: <span id="stepNominalUm">—</span> &#956;m · 초과 구간 빨간선 표시
+          기준: <span id="stepNominalUm">—</span> μm · 초과 구간 빨간선 표시
         </div>
       </div>
     </div>
@@ -427,21 +434,6 @@
 
       <!-- 방향별 2분할 -->
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
-        <div style="background:var(--bg3);border-radius:10px;padding:16px;border-top:2px solid #74c0fc;">
-          <div style="font-size:12px;font-weight:700;color:#74c0fc;margin-bottom:12px;">↑ 정방향 (Go Up)</div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-            <div>
-              <div style="font-size:10px;color:#5a6070;margin-bottom:3px;">이송정도 A↑</div>
-              <div style="font-size:18px;font-weight:700;color:#74c0fc;" id="sum_Aup">—</div>
-              <div style="font-size:10px;color:#5a6070;">&#956;m</div>
-            </div>
-            <div>
-              <div style="font-size:10px;color:#5a6070;margin-bottom:3px;">반복정도 R↑</div>
-              <div style="font-size:18px;font-weight:700;color:#4dabf7;" id="sum_Rup">—</div>
-              <div style="font-size:10px;color:#5a6070;">&#956;m</div>
-            </div>
-          </div>
-        </div>
         <div style="background:var(--bg3);border-radius:10px;padding:16px;border-top:2px solid #ff6b6b;">
           <div style="font-size:12px;font-weight:700;color:#ff6b6b;margin-bottom:12px;">↓ 역방향 (Go Down)</div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
@@ -453,6 +445,21 @@
             <div>
               <div style="font-size:10px;color:#5a6070;margin-bottom:3px;">반복정도 R↓</div>
               <div style="font-size:18px;font-weight:700;color:#ff8787;" id="sum_Rdown">—</div>
+              <div style="font-size:10px;color:#5a6070;">&#956;m</div>
+            </div>
+          </div>
+        </div>
+        <div style="background:var(--bg3);border-radius:10px;padding:16px;border-top:2px solid #74c0fc;">
+          <div style="font-size:12px;font-weight:700;color:#74c0fc;margin-bottom:12px;">↑ 정방향 (Go Up)</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+            <div>
+              <div style="font-size:10px;color:#5a6070;margin-bottom:3px;">이송정도 A↑</div>
+              <div style="font-size:18px;font-weight:700;color:#74c0fc;" id="sum_Aup">—</div>
+              <div style="font-size:10px;color:#5a6070;">&#956;m</div>
+            </div>
+            <div>
+              <div style="font-size:10px;color:#5a6070;margin-bottom:3px;">반복정도 R↑</div>
+              <div style="font-size:18px;font-weight:700;color:#4dabf7;" id="sum_Rup">—</div>
               <div style="font-size:10px;color:#5a6070;">&#956;m</div>
             </div>
           </div>
@@ -482,14 +489,9 @@
         <button onclick="resetZoom('dev')" style="padding:5px 14px;background:transparent;border:1px solid #2e3352;border-radius:6px;color:#8b92b8;font-size:12px;cursor:pointer;">↺ 줌 초기화</button>
       </div>
       <p>각 회차별 오차(&#956;m). 왼쪽: Go Down (역방향 ↓) &nbsp;|&nbsp; 오른쪽: Go Up (정방향 ↑) &nbsp;·&nbsp; <span style="font-size:12px;color:#8b92b8;">드래그로 확대</span></p>
-      <div style="display:flex;align-items:center;gap:20px;margin-bottom:12px;flex-wrap:wrap;">
+      <div style="display:flex;align-items:center;gap:16px;margin-bottom:12px;flex-wrap:wrap;">
         <div id="devLegendBar" class="legend-bar" style="margin:0;flex:1;"></div>
-        <div style="display:flex;align-items:center;gap:10px;white-space:nowrap;">
-          <label style="font-size:12px;color:#8b92b8;">점 크기</label>
-          <input type="range" id="pointSizeSlider" min="2" max="20" value="5" step="1"
-            style="width:90px;" oninput="updatePointSize(this.value)">
-          <span id="pointSizeVal" style="font-size:12px;color:#e8eaf6;min-width:20px;">5</span>
-        </div>
+        <div id="cycleCheckboxes" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;"></div>
       </div>
       <div class="chart-wrap" style="height:400px;">
         <canvas id="devChart" role="img" aria-label="타겟 위치별 편차 그래프"></canvas>
@@ -543,6 +545,14 @@ setTimeout(updateStepNominal, 0); // 즉시 실행도 추가
   if (el) el.addEventListener('input', updateStepNominal);
 });
 const zone = document.getElementById('uploadZone');
+const fileInput = document.getElementById('fileInput');
+
+// fileInput이 zone 전체를 덮고 있으므로 change 이벤트만 처리
+fileInput.addEventListener('change', e => {
+  const f = e.target.files[0];
+  if (f) { window._currentFileName = f.name; processFile(f); }
+});
+
 zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('dragover'); });
 zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
 zone.addEventListener('drop', e => {
@@ -593,50 +603,56 @@ function parseCSV(text) {
 // ── 데이터 분석 (T0 감지 & 정보 표시) ──
 function autoDetectTargets(pos) {
   const samplingUsec = parseFloat(document.getElementById('samplingUsec').value) || 1000;
-  const dt = samplingUsec / 1e6;
-  const velThreshold = parseFloat(document.getElementById('velThreshold').value) || 5;
-  const minStopSamples = parseInt(document.getElementById('minStopSamples').value) || 30;
+  const stopWindowMs    = parseFloat(document.getElementById('stopWindowMs').value) || 50;
+  const stopThresholdUm = parseFloat(document.getElementById('stopThresholdUm').value) || 5;
+  const minStopSamples  = parseInt(document.getElementById('minStopSamples').value) || 30;
   const skipCycles = parseInt(document.getElementById('skipCycles').value) || 1;
-  const useCycles = parseInt(document.getElementById('useCycles').value) || 5;
-  const stepCount = parseFloat(document.getElementById('stepCount').value) || 460;
-  const stepUm = parseFloat(document.getElementById('stepUm').value) || 0.9817;
-  const stepMm = stepCount * stepUm / 1000;
-  const nTargets = 9; // 11포인트 측정: T0 + T1~T9 + T10(터닝포인트)
+  const useCycles  = parseInt(document.getElementById('useCycles').value)  || 5;
+  const stepCount  = parseFloat(document.getElementById('stepCount').value) || 720;
+  const stepUm     = parseFloat(document.getElementById('stepUm').value)    || 0.9817;
+  const stepMm     = stepCount * stepUm / 1000;
+  const nTargets   = 9;
 
-  const vel = [0];
-  for (let i = 1; i < pos.length; i++) vel.push((pos[i] - pos[i-1]) / dt);
-  const moving = vel.map(v => Math.abs(v) > velThreshold);
-
-  const groups = [];
-  let gst = 0;
-  for (let i = 1; i <= pos.length; i++) {
-    if (i === pos.length || moving[i] !== moving[gst]) {
-      groups.push({ start: gst, end: i-1, isMoving: moving[gst] });
-      gst = i;
+  const windowSamples = Math.max(2, Math.round(stopWindowMs / (samplingUsec / 1000)));
+  const threshMm = stopThresholdUm / 1000;
+  const isStationary = new Array(pos.length).fill(false);
+  for (let i = 0; i <= pos.length - windowSamples; i++) {
+    let lo = pos[i], hi = pos[i];
+    for (let j = i+1; j < i+windowSamples; j++) {
+      if (pos[j] < lo) lo = pos[j];
+      if (pos[j] > hi) hi = pos[j];
     }
+    if (hi - lo < threshMm) for (let j = i; j < i+windowSamples; j++) isStationary[j] = true;
   }
 
   const reps = [];
-  groups.forEach(g => {
-    if (!g.isMoving) {
-      const len = g.end - g.start + 1;
+  let inStop = false, stopStart = 0;
+  for (let i = 0; i <= pos.length; i++) {
+    const st = i < pos.length ? isStationary[i] : false;
+    if (st && !inStop) { inStop = true; stopStart = i; }
+    else if (!st && inStop) {
+      const len = i - stopStart;
       if (len >= minStopSamples) {
-        const half = g.start + Math.floor(len / 2);
-        reps.push(median(pos.slice(half, g.end + 1)));
+        const half = stopStart + Math.floor(len/2);
+        reps.push(median(pos.slice(half, i)));
       }
+      inStop = false;
     }
-  });
+  }
 
   if (reps.length < 4) return;
 
-  // nTargets+2 = 11 클러스터 고정
-  const centers = kMeans(reps, nTargets + 2).sort((a,b) => b-a);
-  const t0 = centers[0];
-  const tn = centers[centers.length - 1];
+  // T0 = 최댓값 클러스터
+  const uniqueDesc = [...new Set(reps.map(r => Math.round(r*1000)/1000))].sort((a,b) => b-a);
+  let t0Boundary = Math.max(...reps) - stepMm * 0.5;
+  for (let i = 0; i < uniqueDesc.length-1; i++) {
+    if (uniqueDesc[i]-uniqueDesc[i+1] > 0.10) { t0Boundary = (uniqueDesc[i]+uniqueDesc[i+1])/2; break; }
+  }
+  const t0Cluster = reps.filter(r => r > t0Boundary);
+  const t0 = t0Cluster.length ? t0Cluster.reduce((a,b)=>a+b,0)/t0Cluster.length : Math.max(...reps);
 
-  // T0 기준 stepMm 간격으로 nominal 생성
-  const nominals = Array.from({length: nTargets}, (_, i) => t0 - (i+1) * stepMm);
-  const t10Calc = t0 - (nTargets + 1) * stepMm; // T10 계산값
+  const nominals = Array.from({length: nTargets}, (_, i) => t0 - (i+1)*stepMm);
+  const t10Calc  = t0 - (nTargets+1)*stepMm;
 
   document.getElementById('detectBox').style.display = 'block';
   document.getElementById('detectedClusters').textContent = nTargets + 2;
@@ -684,32 +700,50 @@ function runAnalysis() {
 function analyze(pos) {
   const samplingUsec = parseFloat(document.getElementById('samplingUsec').value) || 500;
   const dt = samplingUsec / 1e6;
-  const velThreshold = parseFloat(document.getElementById('velThreshold').value) || 5;
-  const minStopSamples = parseInt(document.getElementById('minStopSamples').value) || 30;
+  const velThreshold    = parseFloat(document.getElementById('velThreshold').value)    || 5;
+  const minStopSamples  = parseInt(document.getElementById('minStopSamples').value)    || 30;
+  const stopWindowMs    = parseFloat(document.getElementById('stopWindowMs').value)    || 50;
+  const stopThresholdUm = parseFloat(document.getElementById('stopThresholdUm').value) || 5;
   const skipCycles = parseInt(document.getElementById('skipCycles').value) || 1;
   const useCycles  = parseInt(document.getElementById('useCycles').value)  || 5;
-  const nTargets   = 9; // 11포인트 고정: T0 + T1~T9(측정) + T10(터닝포인트)
-  const stepCount = parseFloat(document.getElementById('stepCount').value) || 460;
-  const stepUm = parseFloat(document.getElementById('stepUm').value) || 0.9817;
-  const stepMm = stepCount * stepUm / 1000; // T0 기준 간격
+  const nTargets   = 9;
+  const stepCount  = parseFloat(document.getElementById('stepCount').value) || 720;
+  const stepUm     = parseFloat(document.getElementById('stepUm').value)    || 0.9817;
+  const stepMm     = stepCount * stepUm / 1000;
 
   const n = pos.length;
   const timeMs = pos.map((_, i) => i * samplingUsec / 1000);
 
-  // ── 속도 & 이동/정지 구분 ──
-  const vel = [0];
-  for (let i = 1; i < n; i++) vel.push((pos[i] - pos[i-1]) / dt);
-  const moving = vel.map(v => Math.abs(v) > velThreshold);
+  // ── 정지 감지: 슬라이딩 윈도우 방식 ──
+  // stopWindowMs 샘플 동안 max-min < stopThresholdUm/1000 이면 정지
+  const windowSamples = Math.max(2, Math.round(stopWindowMs / (samplingUsec / 1000)));
+  const threshMm = stopThresholdUm / 1000;
+  const isStationary = new Array(n).fill(false);
 
+  for (let i = 0; i <= n - windowSamples; i++) {
+    let lo = pos[i], hi = pos[i];
+    for (let j = i + 1; j < i + windowSamples; j++) {
+      if (pos[j] < lo) lo = pos[j];
+      if (pos[j] > hi) hi = pos[j];
+    }
+    if (hi - lo < threshMm) {
+      for (let j = i; j < i + windowSamples; j++) isStationary[j] = true;
+    }
+  }
+
+  // 연속 정지/이동 구간 추출
   const groups = [];
   let gstart = 0;
   for (let i = 1; i <= n; i++) {
-    if (i === n || moving[i] !== moving[gstart]) {
-      groups.push({ start: gstart, end: i-1, isMoving: moving[gstart] });
+    if (i === n || isStationary[i] !== isStationary[gstart]) {
+      groups.push({ start: gstart, end: i-1, isMoving: !isStationary[gstart] });
       gstart = i;
     }
   }
 
+  // ── 방향 감지: 변위 부호 변경 ──
+  // 각 이동 구간의 변위 합산 → 부호로 up/down 결정
+  // 방향 전환 = 이전 이동 방향과 부호가 반전될 때
   const moveDir = {};
   groups.forEach(g => {
     if (g.isMoving) {
@@ -718,7 +752,7 @@ function analyze(pos) {
     }
   });
 
-  // ── 정지 구간 대표값 ──
+  // 정지 구간 대표값 및 방향 할당
   const stops = [];
   groups.forEach(g => {
     if (!g.isMoving) {
@@ -733,40 +767,127 @@ function analyze(pos) {
     }
   });
 
-  // ── 클러스터링: T0, T1~Tn, Tlast 감지 ──
+  // ── T0 감지: 데이터 내 가장 큰 rep (오버트래블 상단) ──
   const repVals = stops.map(s => s.rep);
-  // nTargets+2 = T0 + 측정타겟 + 터닝포인트
-  const totalClusters = nTargets + 2;
-  const centersAll = kMeans(repVals, totalClusters);
-  const centersDesc = [...centersAll].sort((a, b) => b - a);
+  if (repVals.length < 4) return null;
 
-  // T0 = 최댓값 클러스터, Tlast = 최솟값 클러스터
-  const t0Nominal = centersDesc[0];
-  const actualBottomCluster = centersDesc[centersDesc.length - 1]; // 실측 터닝포인트 위치 (할당 제외용)
-  // T10 = T9(마지막 측정 타겟)에서 1 stepMm 더 내려간 계산값으로 표시
-  const t6Nominal = t0Nominal - (nTargets + 1) * stepMm; // T10 = T0 - 10 × stepMm
+  const repMax = repVals.reduce((a, b) => Math.max(a, b), -Infinity);
+  const repMin = repVals.reduce((a, b) => Math.min(a, b),  Infinity);
 
-  // ★ 측정 타겟 nominal = T0 기준으로 stepMm 간격 계산
-  // T1 = T0 - 1*stepMm, T2 = T0 - 2*stepMm, ..., Tn = T0 - n*stepMm
-  const nominals = Array.from({length: nTargets}, (_, i) => t0Nominal - (i + 1) * stepMm);
-  // nominals[0]=T1(T0에서 1step), nominals[n-1]=Tn(T0에서 n step)
+  // T0 클러스터 경계: 1μm unique 정렬에서 상단 첫 큰 갭(>100μm)
+  const uniqueDesc = [...new Set(repVals.map(r => Math.round(r * 1000) / 1000))].sort((a,b) => b - a);
+  const uniqueAsc  = [...uniqueDesc].reverse();
+  let t0Boundary = repMax - stepMm * 0.5;
+  for (let i = 0; i < uniqueDesc.length - 1; i++) {
+    if (uniqueDesc[i] - uniqueDesc[i+1] > 0.10) {
+      t0Boundary = (uniqueDesc[i] + uniqueDesc[i+1]) / 2;
+      break;
+    }
+  }
 
-  // ── 각 정지 구간 → 타겟 할당 ──
-  const tol = stepMm * 0.45; // 허용 오차: 반 스텝 미만
+  // T0 nominal = T0 클러스터 평균
+  const t0Cluster = repVals.filter(r => r > t0Boundary);
+  const t0Nominal = t0Cluster.length ? t0Cluster.reduce((a,b)=>a+b,0)/t0Cluster.length : repMax;
+
+  // ── nominals: T0 기준 stepMm 간격 계산값 ──
+  const nominals = Array.from({length: nTargets}, (_, i) => t0Nominal - (i+1) * stepMm);
+  // nominals[0]=T1(최대), nominals[8]=T9(최소)
+
+  // T10 경계: T9 nominal보다 stepMm×0.3 이상 아래
+  const t9Nominal = nominals[nTargets - 1];
+  const t10NominalCalc = t9Nominal - stepMm; // 기준 T10 = T9 - 1 step
+  const t10Boundary = t9Nominal - stepMm * 0.30;
+
+  // T10 nominal (터닝포인트 실측 평균)
+  const t10Cluster = repVals.filter(r => r < t10Boundary);
+  const actualBottomCluster = t10Cluster.length ? t10Cluster.reduce((a,b)=>a+b,0)/t10Cluster.length : t10NominalCalc;
+  const t6Nominal = t10NominalCalc; // 기준 T10 = T9 - stepMm
+
+  const tol = stepMm * 0.85;
+
+  // T0/T10 마킹
   stops.forEach(s => {
-    // T0 또는 실측 터닝포인트는 제외
-    if (Math.abs(s.rep - t0Nominal) < tol || Math.abs(s.rep - actualBottomCluster) < tol) {
-      s.targetIdx = -1; s.nominal = null; s.error = null;
+    s.targetIdx = -1; s.nominal = null; s.error = null;
+    if (s.rep > t0Boundary)  s._isT0  = true;
+    if (s.rep < t10Boundary) s._isT10 = true;
+  });
+
+  // ── Down 순차 배정 ──
+  const downStops = stops
+    .filter(s => s.dir === 'down' && !s._isT0 && !s._isT10)
+    .sort((a, b) => a.idxStart - b.idxStart);
+
+  let curDownIdx = -1;
+  let downPassAssigned = new Set();
+  let downSkipNext = false; // T9 완료 후 다음 stop은 T10 → 계산 제외
+  downStops.forEach(s => {
+    if (downSkipNext) {
+      s._isT10 = true; // T10으로 마킹 → 계산 제외
+      downSkipNext = false;
       return;
     }
-    const dists = nominals.map(nm => Math.abs(s.rep - nm));
-    const minDist = Math.min(...dists);
-    if (minDist < tol) {
-      s.targetIdx = dists.indexOf(minDist);
-      s.nominal = nominals[s.targetIdx];
-      s.error = s.rep - s.nominal;
+    let bestIdx = -1, bestDist = Infinity;
+    for (let ti = curDownIdx + 1; ti < nTargets; ti++) {
+      if (downPassAssigned.has(ti)) continue;
+      if (s.rep < nominals[ti] - tol) continue; // 이미 지나친 nominal 건너뜀
+      const d = Math.abs(s.rep - nominals[ti]);
+      if (d < bestDist) { bestDist = d; bestIdx = ti; }
+    }
+    if (bestIdx >= 0 && bestDist < tol) {
+      s.targetIdx = bestIdx;
+      s.nominal   = nominals[bestIdx];
+      s.error     = s.rep - s.nominal;
+      curDownIdx  = bestIdx;
+      downPassAssigned.add(bestIdx);
+      if (bestIdx === nTargets - 1) {
+        curDownIdx = -1;
+        downPassAssigned = new Set();
+        downSkipNext = true; // 다음 stop은 실제 T10
+      }
     } else {
-      s.targetIdx = -1; s.nominal = null; s.error = null;
+      const nextNom = (curDownIdx + 1 < nTargets) ? nominals[curDownIdx + 1] : null;
+      if (nextNom !== null && s.rep < nextNom - tol) {
+        curDownIdx = -1;
+        downPassAssigned = new Set();
+        downSkipNext = false;
+      }
+    }
+  });
+
+  // ── Up 순차 배정 ──
+  const upStops = stops
+    .filter(s => s.dir === 'up' && !s._isT0 && !s._isT10)
+    .sort((a, b) => a.idxStart - b.idxStart);
+
+  let curUpIdx = nTargets;
+  let upPassAssigned = new Set();
+  upStops.forEach(s => {
+    // T0 구간 정지점은 Up 배정 불가
+    if (s.rep > t0Boundary) return;
+
+    let bestIdx = -1, bestDist = Infinity;
+    for (let ti = curUpIdx - 1; ti >= 0; ti--) {
+      if (upPassAssigned.has(ti)) continue;
+      if (s.rep > nominals[ti] + tol) continue;
+      const d = Math.abs(s.rep - nominals[ti]);
+      if (d < bestDist) { bestDist = d; bestIdx = ti; }
+    }
+    if (bestIdx >= 0 && bestDist < tol) {
+      s.targetIdx = bestIdx;
+      s.nominal   = nominals[bestIdx];
+      s.error     = s.rep - s.nominal;
+      curUpIdx    = bestIdx;
+      upPassAssigned.add(bestIdx);
+      if (bestIdx === 0) {
+        curUpIdx = nTargets;
+        upPassAssigned = new Set();
+      }
+    } else {
+      const nextNom = (curUpIdx - 1 >= 0) ? nominals[curUpIdx - 1] : null;
+      if (nextNom !== null && s.rep > nextNom + tol) {
+        curUpIdx = nTargets;
+        upPassAssigned = new Set();
+      }
     }
   });
 
@@ -774,26 +895,17 @@ function analyze(pos) {
   validStops.sort((a, b) => a.idxStart - b.idxStart);
 
   // ── 사이클 구분: pass 기반 ──
+  // 새 패스 조건: Down은 tIdx=0(T1) 등장 시, Up은 tIdx=nTargets-1(T9) 등장 시
   let downPassNo = 0, upPassNo = 0;
-  let prevDownTIdx = null, prevUpTIdx = null;
+  let inDownPass = false, inUpPass = false;
 
   validStops.forEach(s => {
     if (s.dir === 'down') {
-      if (prevDownTIdx === null || s.targetIdx <= prevDownTIdx) {
-        downPassNo++;
-        prevDownTIdx = null;
-      }
-      s.passNo = downPassNo;
-      prevDownTIdx = s.targetIdx;
-      prevUpTIdx = null;
+      if (s.targetIdx === 0) { downPassNo++; inDownPass = true; }
+      s.passNo = inDownPass ? downPassNo : 0;
     } else {
-      if (prevUpTIdx === null || s.targetIdx >= prevUpTIdx) {
-        upPassNo++;
-        prevUpTIdx = null;
-      }
-      s.passNo = upPassNo;
-      prevUpTIdx = s.targetIdx;
-      prevDownTIdx = null;
+      if (s.targetIdx === nTargets - 1) { upPassNo++; inUpPass = true; }
+      s.passNo = inUpPass ? upPassNo : 0;
     }
   });
 
@@ -862,7 +974,8 @@ function analyze(pos) {
       if (!vals.length) return null;
       const mean = avg(vals);
       const meanErr = mean - nom;
-      const sj = stddev(vals);
+      // n=1이면 σ=0으로 처리 (단일 측정, 산포 정보 없음)
+      const sj = vals.length >= 2 ? stddev(vals) : 0;
       return { mean, meanErr, sj, n: vals.length };
     };
 
@@ -950,26 +1063,19 @@ function analyze(pos) {
   const nominalStepMm = stepMm;
 
   const violationSegs = [];
+  // 같은 방향 + 같은 cycleNo 내 인접 타겟만 비교
   const measSorted = [...meas].sort((a, b) => a.idxStart - b.idxStart);
-
-  // 디버그: 모든 인접 쌍 출력
-  console.group('=== 허용오차 검사 (기준: ' + (nominalStepMm*1000).toFixed(2) + ' μm ±' + toleranceUm + ' μm) ===');
   for (let i = 0; i < measSorted.length - 1; i++) {
     const s1 = measSorted[i], s2 = measSorted[i + 1];
     if (s1.dir !== s2.dir) continue;
+    if (s1.cycleNo !== s2.cycleNo) continue;                    // 같은 회차만
     if (Math.abs(s1.targetIdx - s2.targetIdx) !== 1) continue;
     const dist = Math.abs(s2.rep - s1.rep);
     const diff = Math.abs(dist - nominalStepMm);
-    const isViol = diff > toleranceMm;
-    console.log(
-      `%c${s1.dir} T${s1.targetIdx+1}(${(s1.rep).toFixed(4)})→T${s2.targetIdx+1}(${(s2.rep).toFixed(4)})` +
-      ` | 거리=${(dist*1000).toFixed(2)}μm | 편차=${(diff*1000).toFixed(2)}μm | ${isViol ? '⚠ 초과' : '✓ 정상'}`,
-      isViol ? 'color:red;font-weight:bold' : 'color:green'
-    );
-    if (isViol) {
+    if (diff > toleranceMm) {
       violationSegs.push({
-        tStart:   timeMs[Math.min(s1.idxEnd,    timeMs.length - 1)],
-        tEnd:     timeMs[Math.min(s2.idxStart,  timeMs.length - 1)],
+        tStart:   timeMs[Math.min(s1.idxEnd,   timeMs.length - 1)],
+        tEnd:     timeMs[Math.min(s2.idxStart, timeMs.length - 1)],
         posStart: s1.rep,
         posEnd:   s2.rep,
         dist:     dist * 1000,
@@ -979,8 +1085,6 @@ function analyze(pos) {
       });
     }
   }
-  console.log('총 위반 구간:', violationSegs.length);
-  console.groupEnd();
 
   return {
     timeMs, pos, dsData, posMin, posMax,
@@ -989,7 +1093,7 @@ function analyze(pos) {
     A_up, A_down, R_up: R_upVal, R_down: R_downVal,
     Backlash_mean, Backlash_max,
     nTargets, samplingUsec, maxCycle, skipCycles,
-    t0Nominal, t6Nominal, overtravelNominal: t6Nominal,
+    t0Nominal, t6Nominal, actualBottomCluster, overtravelNominal: t6Nominal,
     violationSegs, toleranceUm, nominalStepMm,
   };
 }
@@ -1035,6 +1139,14 @@ function render(r) {
   renderDevChart(r);
   renderDetailTable(r);
   renderISOTable(r);
+  // 임시 디버그
+  if (typeof console !== 'undefined') {
+    const dn = r.meas.filter(s=>s.dir==='down');
+    const up = r.meas.filter(s=>s.dir==='up');
+    console.log('[meas] down:', dn.length, 'up:', up.length);
+    if (dn.length) console.log('[meas down[0]]', JSON.stringify({cycleNo:dn[0].cycleNo, tIdx:dn[0].targetIdx, idxStart:dn[0].idxStart, idxEnd:dn[0].idxEnd}));
+    else console.warn('[meas] DOWN EMPTY!');
+  }
   document.getElementById('newUploadBtn').style.display = 'inline-flex';
 }
 
@@ -1060,23 +1172,14 @@ function getCycleColor(cycleNo, dir) {
 }
 
 // 줌 리셋
-function resetZoom(chartId) {
-  if (chartId === 'pos' && posChart) posChart.resetZoom();
-  if (chartId === 'dev' && devChart) devChart.resetZoom();
-}
 
-// 점 크기 실시간 업데이트
-function updatePointSize(val) {
-  document.getElementById('pointSizeVal').textContent = val;
+// 회차 체크박스 토글
+function toggleDevCycle(cycleNo, visible) {
   if (!devChart) return;
-  const sz = parseInt(val);
-  // elements 전역 설정 업데이트 (Chart.js 4.x에서 가장 확실한 방법)
-  devChart.options.elements.point.radius = sz;
-  devChart.options.elements.point.hoverRadius = sz + 3;
-  // dataset 레벨도 함께 업데이트
-  devChart.data.datasets.forEach(ds => {
-    ds.pointRadius = sz;
-    ds.pointHoverRadius = sz + 3;
+  devChart.data.datasets.forEach((ds, i) => {
+    if (ds.cycleNo === cycleNo) {
+      devChart.data.datasets[i].hidden = !visible;
+    }
   });
   devChart.update();
 }
@@ -1087,65 +1190,98 @@ function renderChart(r) {
 
   const dsStep = Math.max(1, Math.floor(r.pos.length / 4000));
 
-  // 각 시점에 warmup / valid / extra 매핑
+  // ── pointMap: 각 인덱스의 색상 정보 ──
+  // 방식: 정지점 구간 직접 채우기 + 이동 구간은 앞 정지점 색으로 단순 전파
   const pointMap = new Array(r.pos.length).fill(null);
 
-  // 1) 웜업 (회색)
+  // 1) warmup 정지점
   r.warmupStops.forEach(s => {
-    for (let i = s.idxStart; i <= s.idxEnd; i++) pointMap[i] = { type: 'warmup' };
+    for (let i = s.idxStart; i <= s.idxEnd; i++)
+      pointMap[i] = { type: 'warmup' };
   });
-  // 2) 범위 초과 (회색, extra)
+  // 2) extra 정지점
   r.extraStops.forEach(s => {
-    for (let i = s.idxStart; i <= s.idxEnd; i++) pointMap[i] = { type: 'extra' };
+    for (let i = s.idxStart; i <= s.idxEnd; i++)
+      pointMap[i] = { type: 'extra' };
   });
-  // 3) 유효 사이클 (컬러) — 마지막에 덮어써서 우선
+  // 3) 유효 사이클 정지점 (덮어쓰기로 우선)
   r.meas.forEach(s => {
-    for (let i = s.idxStart; i <= s.idxEnd; i++) {
+    for (let i = s.idxStart; i <= s.idxEnd; i++)
       pointMap[i] = { type: 'valid', dir: s.dir, cycleNo: s.cycleNo };
-    }
   });
-  // 이동 구간 전파 (앞→뒤)
-  let lastInfo = null;
-  for (let i = 0; i < pointMap.length; i++) {
-    if (pointMap[i]) lastInfo = pointMap[i];
-    else if (lastInfo) pointMap[i] = lastInfo;
-  }
-  // extra 구간 이후의 이동 구간도 회색으로 처리:
-  // extra 첫 시작 인덱스 이후, pointMap이 null이거나 valid인 구간 → extra로 변경
-  if (r.extraStops && r.extraStops.length > 0) {
-    const firstExtraIdx = Math.min(...r.extraStops.map(s => s.idxStart));
-    const lastMeasIdx = r.meas.length > 0
-      ? Math.max(...r.meas.map(s => s.idxEnd)) : 0;
-    // extra 시작점 이후이고 meas 구간이 아닌 곳은 회색
-    for (let i = firstExtraIdx; i < pointMap.length; i++) {
-      const inMeas = r.meas.some(s => i >= s.idxStart && i <= s.idxEnd);
-      if (!inMeas) pointMap[i] = { type: 'extra' };
+
+  // 4) 이동 구간 전파: 앞뒤 정지점이 같은 dir+cycleNo일 때만 전파
+  //    방향 전환 구간(Down→Up, Up→Down)은 웜업(회색)으로 처리
+  // 모든 정지점을 시간순으로 정렬
+  const allStopsSorted = [
+    ...r.warmupStops.map(s => ({...s, _info: {type:'warmup'}})),
+    ...r.extraStops.map(s => ({...s, _info: {type:'extra'}})),
+    ...r.meas.map(s => ({...s, _info: {type:'valid', dir:s.dir, cycleNo:s.cycleNo}})),
+  ].sort((a, b) => a.idxStart - b.idxStart);
+
+  // 정지점들 사이 이동 구간 색 결정
+  for (let si = 0; si < allStopsSorted.length - 1; si++) {
+    const cur  = allStopsSorted[si];
+    const next = allStopsSorted[si + 1];
+    const curInfo  = cur._info;
+    const nextInfo = next._info;
+
+    // 같은 valid dir+cycleNo이면 해당 색 전파, 아니면 웜업
+    let motionInfo;
+    if (curInfo.type === 'valid' && nextInfo.type === 'valid'
+        && curInfo.dir === nextInfo.dir && curInfo.cycleNo === nextInfo.cycleNo) {
+      motionInfo = curInfo;  // 같은 사이클 내 이동 → 해당 색
+    } else {
+      motionInfo = { type: 'warmup' };  // 방향 전환 또는 다른 사이클 → 회색
+    }
+
+    for (let i = cur.idxEnd + 1; i < next.idxStart; i++) {
+      if (pointMap[i] === null) pointMap[i] = motionInfo;
     }
   }
 
+  // 첫 정지점 이전, 마지막 정지점 이후 → 웜업
+  if (allStopsSorted.length > 0) {
+    const warmupInfo = { type: 'warmup' };
+    for (let i = 0; i < allStopsSorted[0].idxStart; i++)
+      if (pointMap[i] === null) pointMap[i] = warmupInfo;
+    const last = allStopsSorted[allStopsSorted.length - 1];
+    for (let i = last.idxEnd + 1; i < r.pos.length; i++)
+      if (pointMap[i] === null) pointMap[i] = warmupInfo;
+  }
+
+  // ── segMap: dsStep 없이 정지점 구간은 반드시 포함 ──
+  // 이동 구간은 dsStep으로 건너뛰되, 정지점은 모두 포함
   const segMap = {};
-  for (let i = 0; i < r.pos.length; i += dsStep) {
+
+  const addPt = (i) => {
     const info = pointMap[i];
-    if (!info) continue;
-    // warmup과 extra 모두 회색으로 같은 키 사용
-    const key = (info.type === 'warmup' || info.type === 'extra') ? 'warmup'
-              : `${info.dir}_${info.cycleNo}`;
+    if (!info) return;
+    const key = (info.type === 'warmup' || info.type === 'extra')
+      ? 'warmup'
+      : `${info.dir}_${info.cycleNo}`;
     if (!segMap[key]) segMap[key] = { ...info, pts: [] };
     segMap[key].pts.push({ x: r.timeMs[i], y: r.pos[i] });
+  };
+
+  // 정지점 인덱스 집합 (빠른 검색용)
+  const stopSet = new Set();
+  [...r.warmupStops, ...r.extraStops, ...r.meas].forEach(s => {
+    for (let i = s.idxStart; i <= s.idxEnd; i++) stopSet.add(i);
+  });
+
+  for (let i = 0; i < r.pos.length; i++) {
+    if (stopSet.has(i)) {
+      addPt(i); // 정지점은 항상 포함
+    } else if (i % dsStep === 0) {
+      addPt(i); // 이동 구간은 dsStep마다
+    }
   }
+
 
   const datasets = [];
   const legendItems = [];
 
-  if (segMap['warmup']) {
-    datasets.push({
-      label: '웜업',
-      data: segMap['warmup'].pts,
-      borderColor: WARMUP_COLOR, borderWidth: 1,
-      pointRadius: 0, tension: 0, parsing: false, yAxisID: 'y',
-    });
-    legendItems.push({ label: '웜업', colorUp: WARMUP_COLOR, colorDown: null });
-  }
 
   const validKeys = Object.keys(segMap).filter(k => k !== 'warmup');
   validKeys.sort((a, b) => {
@@ -1172,6 +1308,17 @@ function renderChart(r) {
       legendItems.push(item);
     }
   });
+
+  // 웜업은 맨 마지막(가장 아래 레이어)에 추가
+  if (segMap['warmup']) {
+    datasets.push({
+      label: '웜업',
+      data: segMap['warmup'].pts,
+      borderColor: WARMUP_COLOR, borderWidth: 1,
+      pointRadius: 0, tension: 0, parsing: false, yAxisID: 'y',
+    });
+    legendItems.unshift({ label: '웜업', colorUp: WARMUP_COLOR, colorDown: null });
+  }
 
   // T1~T5 nominal 기준선 (파란 점선)
   r.nominals.forEach((nom, i) => {
@@ -1219,7 +1366,40 @@ function renderChart(r) {
           mode: 'nearest', intersect: false,
           filter: item => !item.dataset.label.startsWith('__') && item.dataset.label !== '웜업',
           callbacks: {
-            label: ctx => `${ctx.dataset.label}: ${ctx.parsed.y.toFixed(4)} mm`
+            title: ctxArr => {
+              const pt = ctxArr[0];
+              const tMs = pt.parsed.x;
+              const yMm = pt.parsed.y;
+              // 커서 위치 표시
+              const tStr = tMs >= 1000 ? (tMs/1000).toFixed(3)+'s' : tMs.toFixed(1)+'ms';
+              let closest = null, minD = Infinity;
+              r.meas.forEach(s => {
+                const mid = r.timeMs[Math.floor((s.idxStart + s.idxEnd) / 2)];
+                const d = Math.abs(mid - tMs);
+                if (d < minD) { minD = d; closest = s; }
+              });
+              if (closest && minD < 2000) {
+                const dir = closest.dir === 'up' ? '↑ Go Up' : '↓ Go Down';
+                return [`${dir}  T${closest.targetIdx + 1}  [${closest.cycleNo}회차]`,
+                        `위치: ${yMm.toFixed(4)} mm  |  시간: ${tStr}`];
+              }
+              return [`${pt.dataset.label}`, `위치: ${yMm.toFixed(4)} mm  |  시간: ${tStr}`];
+            },
+            label: ctxItem => {
+              const tMs = ctxItem.parsed.x;
+              let closest = null, minD = Infinity;
+              r.meas.forEach(s => {
+                const mid = r.timeMs[Math.floor((s.idxStart + s.idxEnd) / 2)];
+                const d = Math.abs(mid - tMs);
+                if (d < minD) { minD = d; closest = s; }
+              });
+              if (closest && minD < 2000 && closest.error !== null) {
+                const err = (closest.error * 1000);
+                const sign = err >= 0 ? '+' : '';
+                return `대표값: ${closest.rep.toFixed(4)} mm  |  편차: ${sign}${err.toFixed(1)} μm`;
+              }
+              return null;
+            }
           }
         },
         zoom: {
@@ -1230,6 +1410,7 @@ function renderChart(r) {
           limits: { x: { min: 'original', max: 'original' }, y: { min: 'original', max: 'original' } }
         }
       },
+      interaction: { mode: 'nearest', intersect: false, axis: 'x' },
       scales: {
         x: {
           type: 'linear',
@@ -1401,6 +1582,45 @@ function renderChart(r) {
         chart._violationSegs = segs;
         ctx.restore();
       }
+    }, {
+      // ── 정지점 마커: 그래프 색상과 동일, T번호 라벨 + 크로스하이라이트 ──
+      id: 'stopLabels',
+      afterRender(chart) {
+        const { ctx, chartArea, scales } = chart;
+        const xScale = scales['x'], yScale = scales['y'];
+        if (!xScale || !yScale || !chartArea) return;
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(chartArea.left, chartArea.top, chartArea.width, chartArea.height);
+        ctx.clip();
+        const hs = window._hoveredStop;
+        r.meas.forEach(s => {
+          const tMid = r.timeMs[Math.floor((s.idxStart + s.idxEnd) / 2)];
+          const px = xScale.getPixelForValue(tMid);
+          const py = yScale.getPixelForValue(s.rep);
+          if (px < chartArea.left || px > chartArea.right || py < chartArea.top || py > chartArea.bottom) return;
+          const color = getCycleColor(s.cycleNo, s.dir);
+          const isHighlighted = hs && hs.tIdx === s.targetIdx && hs.dir === s.dir;
+          const r2 = isHighlighted ? 7 : 4.5;
+          if (isHighlighted) {
+            ctx.beginPath();
+            ctx.arc(px, py, r2 + 3, 0, Math.PI * 2);
+            ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.setLineDash([]);
+            ctx.stroke();
+          }
+          ctx.beginPath();
+          ctx.arc(px, py, r2, 0, Math.PI * 2);
+          ctx.fillStyle = color; ctx.fill();
+          ctx.strokeStyle = 'rgba(15,17,23,0.8)'; ctx.lineWidth = 1; ctx.stroke();
+          const label = `T${s.targetIdx + 1}`;
+          const offsetY = s.dir === 'up' ? -14 : 14;
+          ctx.font = `${isHighlighted ? 'bold 10px' : 'bold 8.5px'} Segoe UI,system-ui,sans-serif`;
+          ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+          ctx.fillStyle = color;
+          ctx.fillText(label, px, py + offsetY);
+        });
+        ctx.restore();
+      }
     }]
   });
 
@@ -1442,7 +1662,36 @@ function renderChart(r) {
       canvas.style.cursor = '';
     }
   });
-  canvas.addEventListener('mouseleave', () => { violTooltip.style.display = 'none'; });
+  canvas.addEventListener('mouseleave', () => {
+    violTooltip.style.display = 'none';
+    window._hoveredStop = null;
+    if (devChart) devChart.update('none');
+    if (posChart) posChart.update('none');
+  });
+
+  // ── posChart 마우스로 정지점 hover 감지 → 크로스하이라이트 ──
+  canvas.addEventListener('mousemove', (e) => {
+    if (!posChart) return;
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+    const xScale = posChart.scales['x'], yScale = posChart.scales['y'];
+    if (!xScale || !yScale) return;
+    let closest = null, minDist = 20; // px threshold
+    r.meas.forEach(s => {
+      const tMid = r.timeMs[Math.floor((s.idxStart + s.idxEnd) / 2)];
+      const px = xScale.getPixelForValue(tMid);
+      const py = yScale.getPixelForValue(s.rep);
+      const dist = Math.sqrt((mx - px)**2 + (my - py)**2);
+      if (dist < minDist) { minDist = dist; closest = s; }
+    });
+    const newHover = closest ? { tIdx: closest.targetIdx, dir: closest.dir } : null;
+    const prev = window._hoveredStop;
+    if (JSON.stringify(newHover) !== JSON.stringify(prev)) {
+      window._hoveredStop = newHover;
+      if (devChart) devChart.update('none');
+      if (posChart) posChart.update('none');
+    }
+  });
 }
 
 // ── 타겟 위치별 편차 그래프 ─────────────────────
@@ -1450,68 +1699,116 @@ function renderDevChart(r) {
   if (devChart) devChart.destroy();
 
   const nT = r.nTargets;
-  const nominals = r.nominals;
   const maxCycle = r.maxCycle;
-  const ptSize = parseInt(document.getElementById('pointSizeSlider').value) || 5;
+  const ptSize = 3;
 
-  // ── x축 설계 ──
-  // Down 구간: "D_T1","D_T2",...,"D_T5"  (T1→T5, 큰→작)
-  // 구분자: ""  (빈 칸)
-  // Up 구간:  "U_T5","U_T4",...,"U_T1"  (T5→T1, 작→큰)
-  const downLabels = Array.from({length: nT}, (_, i) => `D_T${i+1}`);  // D_T1~D_T5
-  const upLabels   = Array.from({length: nT}, (_, i) => `U_T${nT-i}`); // U_T5~U_T1
-  const xLabels = [...downLabels, '', ...upLabels]; // 중간에 구분용 빈칸
-
-  // 화면에 보여줄 레이블 (D_/U_ prefix 제거, 빈칸은 '|')
+  // X축: T0(Down) | T1~T9(Down) | '' | T9~T1(Up) | T10(Up)
+  const downLabels = ['D_T0', ...Array.from({length: nT}, (_, i) => `D_T${i+1}`)];
+  const upLabels   = [...Array.from({length: nT}, (_, i) => `U_T${nT-i}`), 'U_T10'];
+  const xLabels    = [...downLabels, '', ...upLabels];
   const displayLabels = xLabels.map(l => {
     if (l === '') return '';
-    return l.replace(/^[DU]_/, ''); // T1, T2 ...
+    return l.replace(/^[DU]_/, '');
   });
 
-  const downOrder = Array.from({length: nT}, (_, i) => i);        // targetIdx 0→nT-1
-  const upOrder   = Array.from({length: nT}, (_, i) => nT-1-i);   // targetIdx nT-1→0
+  // Down 순서: T0(웜업) → T1~T9(측정)
+  // Up 순서: T9~T1(측정) → T10(웜업)
+  const downOrder = Array.from({length: nT}, (_, i) => i);   // targetIdx 0~8
+  const upOrder   = Array.from({length: nT}, (_, i) => nT-1-i);
 
   const datasets = [];
   const legendItems = [];
+
+  // ── T0 / T10 웜업 포인트 (단일 dataset, 모든 패스 평균) ──
+  // Down 시작: T0 위치 = t0Nominal, 오차 = (warmupStop rep 평균) - t0Nominal
+  // Up 끝: T10 위치 = t6Nominal(계산값), 오차는 표시만 (터닝포인트)
+  const warmupColor = 'rgba(120,130,160,0.7)';
+
+  // T0: 모든 stops 중 dir==='down' && rep이 t0Nominal에 가장 가까운 것들의 평균 오차
+  const t0Stops = r.stops.filter(s =>
+    s.dir === 'down' && Math.abs(s.rep - r.t0Nominal) < r.stepMm * 0.5
+  );
+  const t0ErrMean = t0Stops.length
+    ? t0Stops.reduce((a, s) => a + (s.rep - r.t0Nominal) * 1000, 0) / t0Stops.length
+    : null;
+
+  // T10: 실측 터닝포인트 클러스터(actualBottomCluster) 기준으로 가까운 정지점
+  const t10Ref = r.actualBottomCluster ?? r.t6Nominal;
+  const t10Stops = r.stops.filter(s => Math.abs(s.rep - t10Ref) < r.stepMm * 1.0);
+  const t10ErrMean = t10Stops.length
+    ? t10Stops.reduce((a, s) => a + (s.rep - t10Ref) * 1000, 0) / t10Stops.length
+    : null;
+
+  // T0 포인트 (Down 시작 - T0 위치 오차)
+  datasets.push({
+    label: 'T0 (웜업)', cycleNo: null,
+    data: xLabels.map(l => l === 'D_T0'
+      ? { x: 'D_T0', y: t0ErrMean !== null ? parseFloat(t0ErrMean.toFixed(3)) : null }
+      : { x: l, y: null }),
+    borderColor: warmupColor, backgroundColor: warmupColor,
+    borderWidth: 1.5, pointRadius: ptSize+1, pointHoverRadius: ptSize+4,
+    tension: 0, spanGaps: false, showLine: false,
+    parsing: { xAxisKey: 'x', yAxisKey: 'y' },
+  });
+  // T10 포인트 (Up 끝 - 터닝포인트 위치 오차)
+  datasets.push({
+    label: 'T10 (터닝)', cycleNo: null,
+    data: xLabels.map(l => l === 'U_T10'
+      ? { x: 'U_T10', y: t10ErrMean !== null ? parseFloat(t10ErrMean.toFixed(3)) : null }
+      : { x: l, y: null }),
+    borderColor: warmupColor, backgroundColor: warmupColor,
+    borderWidth: 1.5, pointRadius: ptSize+1, pointHoverRadius: ptSize+4,
+    tension: 0, spanGaps: false, showLine: false,
+    parsing: { xAxisKey: 'x', yAxisKey: 'y' },
+  });
 
   for (let c = 1; c <= maxCycle; c++) {
     const colorDown = getCycleColor(c, 'down');
     const colorUp   = getCycleColor(c, 'up');
 
-    // Down 포인트: xLabels[0~nT-1]
     const downPts = downOrder.map((tIdx, xi) => {
       const s = r.meas.find(m => m.targetIdx === tIdx && m.dir === 'down' && m.cycleNo === c);
-      return { x: downLabels[xi], y: s ? parseFloat((s.error*1000).toFixed(3)) : null, tIdx, dir:'down' };
+      return { x: downLabels[xi+1], y: s ? parseFloat((s.error*1000).toFixed(3)) : null,
+               tIdx, dir: 'down' };
     });
-
-    // Up 포인트: xLabels[nT+1~2*nT]  (nT는 구분자)
     const upPts = upOrder.map((tIdx, xi) => {
       const s = r.meas.find(m => m.targetIdx === tIdx && m.dir === 'up' && m.cycleNo === c);
-      return { x: upLabels[xi], y: s ? parseFloat((s.error*1000).toFixed(3)) : null, tIdx, dir:'up' };
+      return { x: upLabels[xi], y: s ? parseFloat((s.error*1000).toFixed(3)) : null,
+               tIdx, dir: 'up' };
     });
 
     datasets.push({
-      label: `↓ Down ${c}회차`,
+      label: `↓ Down ${c}회차`, cycleNo: c,
       data: downPts, borderColor: colorDown, backgroundColor: colorDown,
       borderWidth: 1.5, pointRadius: ptSize, pointHoverRadius: ptSize+3,
       tension: 0, spanGaps: false, showLine: true,
     });
     datasets.push({
-      label: `↑ Up ${c}회차`,
+      label: `↑ Up ${c}회차`, cycleNo: c,
       data: upPts, borderColor: colorUp, backgroundColor: colorUp,
       borderWidth: 1.5, pointRadius: ptSize, pointHoverRadius: ptSize+3,
       tension: 0, spanGaps: false, showLine: true,
     });
-    legendItems.push({ label: `${c}회차`, colorUp, colorDown });
+    legendItems.push({ label: `${c}회차`, cycleNo: c, colorUp, colorDown });
   }
 
-  document.getElementById('devLegendBar').innerHTML = legendItems.map(item =>
-    `<div class="legend-item" style="gap:4px;">
-      <div style="width:9px;height:9px;border-radius:2px;background:${item.colorDown};flex-shrink:0;"></div>
-      <div style="width:9px;height:9px;border-radius:2px;background:${item.colorUp};flex-shrink:0;"></div>
-      <span>${item.label}</span>
-    </div>`
-  ).join('');
+  // 체크박스 렌더링
+  const cbContainer = document.getElementById('cycleCheckboxes');
+  if (cbContainer) {
+    cbContainer.innerHTML = legendItems.map(item => `
+      <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:12px;color:#c8d4e3;">
+        <input type="checkbox" checked data-cycle="${item.cycleNo}"
+          style="cursor:pointer;accent-color:${item.colorUp};"
+          onchange="toggleDevCycle(${item.cycleNo}, this.checked)">
+        <div style="display:flex;gap:3px;align-items:center;">
+          <span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${item.colorDown};"></span>
+          <span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${item.colorUp};"></span>
+        </div>
+        <span>${item.cycleNo}회차</span>
+      </label>`).join('');
+  }
+
+  document.getElementById('devLegendBar').innerHTML = '';
 
   const ctx = document.getElementById('devChart').getContext('2d');
   devChart = new Chart(ctx, {
@@ -1526,14 +1823,18 @@ function renderDevChart(r) {
           callbacks: {
             title: ctxArr => {
               const pt = ctxArr[0].raw;
-              if (!pt || pt.tIdx === undefined) return '';
-              const dir = pt.dir === 'down' ? 'Go Down ↓' : 'Go Up ↑';
-              const nom = nominals[pt.tIdx];
-              return `${dir}  ·  T${pt.tIdx+1}  ·  목표 ${nom !== undefined ? nom.toFixed(4) : '?'} mm`;
+              if (!pt) return ctxArr[0].dataset.label;
+              if (pt.tIdx !== undefined) {
+                const dir = pt.dir === 'down' ? 'Go Down ↓' : 'Go Up ↑';
+                return `${dir}  T${pt.tIdx + 1}`;
+              }
+              return ctxArr[0].dataset.label;
             },
-            label: ctx => {
-              const v = ctx.parsed.y;
-              return `${ctx.dataset.label}: ${v !== null ? (v>=0?'+':'') + v.toFixed(2) + '03bcm' : '—'}`;
+            label: ctxItem => {
+              const v = ctxItem.parsed.y;
+              if (v === null || v === undefined) return '—';
+              const sign = v >= 0 ? '+' : '';
+              return `편차: ${sign}${v.toFixed(1)} μm`;
             }
           }
         },
@@ -1543,6 +1844,15 @@ function renderDevChart(r) {
             mode: 'xy',
           },
           limits: { y: { min: 'original', max: 'original' } }
+        }
+      },
+      onHover: (event, activeEls) => {
+        if (!activeEls.length) { window._hoveredStop = null; if (posChart) posChart.update('none'); return; }
+        const pt = activeEls[0];
+        const raw = devChart.data.datasets[pt.datasetIndex].data[pt.index];
+        if (raw && raw.tIdx !== undefined) {
+          window._hoveredStop = { tIdx: raw.tIdx, dir: raw.dir };
+          if (posChart) posChart.update('none');
         }
       },
       scales: {
@@ -1568,10 +1878,8 @@ function renderDevChart(r) {
       afterDraw(chart) {
         const { ctx, chartArea, scales } = chart;
         const xScale = scales.x;
-        // 구분자(빈칸) 위치 = index nT
-        const splitPx = xScale.getPixelForValue(nT);
+        const splitPx = xScale.getPixelForValue(nT + 1);
         if (splitPx < chartArea.left || splitPx > chartArea.right) return;
-
         ctx.save();
         ctx.setLineDash([6, 4]);
         ctx.strokeStyle = 'rgba(255,255,255,0.35)';
@@ -1581,15 +1889,39 @@ function renderDevChart(r) {
         ctx.lineTo(splitPx, chartArea.bottom);
         ctx.stroke();
         ctx.setLineDash([]);
-
         ctx.font = '13px Segoe UI, system-ui, sans-serif';
         ctx.fillStyle = 'rgba(255,255,255,0.5)';
         ctx.textAlign = 'center';
-        const downMid = xScale.getPixelForValue(Math.floor((nT-1)/2));
-        const upMid   = xScale.getPixelForValue(nT + 1 + Math.floor((nT-1)/2));
+        const downMid = xScale.getPixelForValue(Math.floor(nT / 2));
+        const upMid   = xScale.getPixelForValue(nT + 2 + Math.floor(nT / 2));
         ctx.fillText('Go Down ↓', downMid, chartArea.top + 16);
         ctx.fillText('Go Up ↑',   upMid,   chartArea.top + 16);
         ctx.restore();
+      }
+    }, {
+      id: 'devHighlight',
+      afterDraw(chart) {
+        const hs = window._hoveredStop;
+        if (!hs) return;
+        const { ctx, chartArea, scales } = chart;
+        const xScale = scales.x, yScale = scales.y;
+        // 해당 tIdx+dir의 모든 회차 포인트 하이라이트
+        chart.data.datasets.forEach((ds, di) => {
+          if (!ds.cycleNo) return;
+          ds.data.forEach((pt, pi) => {
+            if (!pt || pt.tIdx !== hs.tIdx || pt.dir !== hs.dir) return;
+            if (pt.y === null || pt.y === undefined) return;
+            const xPx = xScale.getPixelForValue(pt.x);
+            const yPx = yScale.getPixelForValue(pt.y);
+            ctx.save();
+            ctx.beginPath();
+            ctx.arc(xPx, yPx, 8, 0, Math.PI * 2);
+            ctx.strokeStyle = ds.borderColor;
+            ctx.lineWidth = 2.5;
+            ctx.stroke();
+            ctx.restore();
+          });
+        });
       }
     }]
   });
@@ -1672,6 +2004,12 @@ function renderMetrics(r) {
   document.getElementById('metricsGrid').innerHTML = html;
 }
 
+// ── 위치-위치 그래프 ──────────────────────────
+function resetZoom(chartId) {
+  if (chartId === 'pos'  && posChart)  posChart.resetZoom();
+  if (chartId === 'dev'  && devChart)  devChart.resetZoom();
+}
+
 function renderDetailTable(r) {
   const maxCycleUp = Math.max(...r.meas.filter(s=>s.dir==='up').map(s=>s.cycleNo), 0);
   const maxCycleDown = Math.max(...r.meas.filter(s=>s.dir==='down').map(s=>s.cycleNo), 0);
@@ -1742,6 +2080,7 @@ function renderISOTable(r) {
     <th rowspan="2">x̄↓<br><small>(&#956;m)</small></th>
     <th rowspan="2">s↑<br><small>(&#956;m)</small></th>
     <th rowspan="2">s↓<br><small>(&#956;m)</small></th>
+    <th rowspan="2" style="color:#8b92b8;">n↑/n↓</th>
     <th rowspan="2" style="color:#74c0fc;">R↑(i)<br><small>(&#956;m)</small></th>
     <th rowspan="2" style="color:#ff6b6b;">R↓(i)<br><small>(&#956;m)</small></th>
     <th rowspan="2" style="color:#f783ac;">B(i)<br><small>(&#956;m)</small></th>
@@ -1757,12 +2096,18 @@ function renderISOTable(r) {
     const isMaxBj = bjAbs > 0 && r.isoResults.every(x => x.Bj === null || Math.abs(x.Bj) <= bjAbs + 1e-9);
     const bjStyle = isMaxBj ? 'color:#f783ac;font-weight:700;' : 'color:#f783ac;';
 
+    // n이 1이면 σ=0이므로 경고 표시
+    const nUp = u ? u.n : 0;
+    const nDn = d ? d.n : 0;
+    const nWarn = (nUp < 2 || nDn < 2) ? ' title="n<2: σ신뢰도 낮음" style="color:#ffd43b;"' : '';
+
     return `<tr>
       <td class="td-label">T${i+1}<br><small style="color:#5a6070;">${ir.nominal.toFixed(3)}</small></td>
       <td class="td-up">${u ? fSign(u.meanErr) : '—'}</td>
       <td class="td-down">${d ? fSign(d.meanErr) : '—'}</td>
-      <td class="td-up">${u ? f1(u.sj) : '—'}</td>
-      <td class="td-down">${d ? f1(d.sj) : '—'}</td>
+      <td class="td-up">${u ? f1(u.sj) + (nUp<2?'*':'') : '—'}</td>
+      <td class="td-down">${d ? f1(d.sj) + (nDn<2?'*':'') : '—'}</td>
+      <td${nWarn}>${nUp}/${nDn}</td>
       <td style="${rupStyle}">${ir.Rj_up !== null ? f1(ir.Rj_up) : '—'}</td>
       <td style="${rdnStyle}">${ir.Rj_down !== null ? f1(ir.Rj_down) : '—'}</td>
       <td style="${bjStyle}">${ir.Bj !== null ? fSign(ir.Bj) : '—'}</td>
