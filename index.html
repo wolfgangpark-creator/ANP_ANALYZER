@@ -104,7 +104,7 @@ body{background:var(--bg);color:var(--text1);font-family:'Segoe UI',system-ui,sa
 <body>
 
 <div class="header">
-  <div class="logo"><span class="s">START</span> <span class="a">ANP</span><span class="v">v1.3.01_20260518</span></div>
+  <div class="logo"><span class="s">START</span> <span class="a">ANP</span><span class="v">v1.3.07_20260518</span></div>
   <div class="header-right">
     <span class="file-count" id="fileCount"></span>
     <button class="btn btn-o" onclick="exportXLSX()" id="btnExport" style="display:none">⬇ xlsx 내보내기</button>
@@ -113,21 +113,20 @@ body{background:var(--bg);color:var(--text1);font-family:'Segoe UI',system-ui,sa
 </div>
 
 <div class="settings">
-  <div class="sg"><label>측정 축</label>
-    <select id="axisSelect" onchange="onAxisChange()">
-      <option value="Y">Y축 (720 step)</option>
-      <option value="X">X축 (460 step)</option>
-    </select>
-  </div>
-  <div class="sg"><label>샘플링(μsec)</label><input type="number" id="samplingUs" value="1000" min="1"></div>
-  <div class="sg"><label>헤더 행 수</label><input type="number" id="headerRows"  value="4"    min="0"></div>
-  <div class="sg"><label>정지창(ms)</label>   <input type="number" id="stopWindowMs" value="30"  min="1"></div>
-  <div class="sg"><label>정지변화(μm)</label> <input type="number" id="stopThreshUm" value="100" min="1"></div>
-  <div class="sg"><label>최소샘플</label>     <input type="number" id="minSamp"   value="20"   min="5"></div>
-  <div class="sg"><label>1step(μm)</label>   <input type="number" id="stepUm"    value="0.9817" step="0.0001"></div>
-  <div class="sg"><label>웜업 사이클</label>  <input type="number" id="warmupCycles" value="4" min="0"></div>
-  <div class="sg"><label>측정 사이클</label>  <input type="number" id="measCycles"   value="5" min="1"></div>
+  <div class="sg"><label>샘플링(μsec)</label> <input type="number" id="samplingUs"   value="1000"   min="1"></div>
+  <div class="sg"><label>헤더 행 수</label>   <input type="number" id="headerRows"   value="4"      min="0"></div>
+  <div class="sg"><label>정지창(ms)</label>   <input type="number" id="stopWindowMs" value="30"     min="1"></div>
+  <div class="sg"><label>정지변화(μm)</label> <input type="number" id="stopThreshUm" value="100"    min="1"></div>
+  <div class="sg"><label>최소샘플</label>     <input type="number" id="minSamp"      value="20"     min="5"></div>
+  <div class="sg"><label>1step(μm)</label>   <input type="number" id="stepUm"       value="0.9817" step="0.0001" oninput="updateInfo()"></div>
+  <div class="sg"><label>웜업 사이클</label>  <input type="number" id="warmupCycles" value="4"      min="0"></div>
+  <div class="sg"><label>측정 사이클</label>  <input type="number" id="measCycles"   value="5"      min="1"></div>
+  <div class="sg"><label>X축 스텝</label>    <input type="number" id="stepCountX"   value="460"    min="1" oninput="updateInfo()"></div>
+  <div class="sg"><label>Y축 스텝</label>    <input type="number" id="stepCountY"   value="720"    min="1" oninput="updateInfo()"></div>
   <div class="s-info" id="stepInfo"></div>
+  <div class="sg" id="sgTolX"></div>
+  <div class="sg" id="sgTolY"></div>
+  <button class="btn btn-o" id="btnUpdate" onclick="rerunAll()" style="display:none">↻ 설정 업데이트</button>
 </div>
 
 <div class="upload-wrap" id="uploadWrap">
@@ -145,7 +144,6 @@ body{background:var(--bg);color:var(--text1);font-family:'Segoe UI',system-ui,sa
 
 <script>
 // ── 상수 ────────────────────────────────────────────────────
-const AXIS = { Y:{stepCount:720,label:'Y축'}, X:{stepCount:460,label:'X축'} };
 const CC = [
   ['#74c0fc','#1c7ed6'],  // 1회차: 파랑
   ['#69db7c','#2f9e44'],  // 2회차: 초록
@@ -161,12 +159,24 @@ const CC = [
 const fileResults = [];   // [{filename, axis, pos}]
 const chartInst   = {};   // idx → Chart
 
+// 축별 레이블
+const AXIS_LABEL = {X:'X축', Y:'Y축'};
+
 // ── 설정 ────────────────────────────────────────────────────
-function S() {
-  const axis = document.getElementById('axisSelect').value;
-  const stepUm = parseFloat(document.getElementById('stepUm').value) || 0.9817;
+function S(axis) {
+  // axis 미지정 시 기본값 Y (파일 없을 때 updateInfo용)
+  const ax = axis || 'Y';
+  const stepUm      = parseFloat(document.getElementById('stepUm').value)       || 0.9817;
+  const stepCountX  = parseInt  (document.getElementById('stepCountX').value)   || 460;
+  const stepCountY  = parseInt  (document.getElementById('stepCountY').value)   || 720;
+  const stepCount   = ax==='X' ? stepCountX : stepCountY;
+  const tolUmX      = parseFloat(document.getElementById('tolUmX')?.value)      || 50;
+  const tolUmY      = parseFloat(document.getElementById('tolUmY')?.value)      || 50;
   return {
-    axis, stepCount:AXIS[axis].stepCount, stepUm,
+    axis: ax,
+    stepCount,
+    stepCountX, stepCountY,
+    stepUm,
     samplingUs:    parseFloat(document.getElementById('samplingUs').value)    || 1000,
     headerRows:    parseInt  (document.getElementById('headerRows').value)    || 4,
     stopWindowMs:  parseFloat(document.getElementById('stopWindowMs').value)  || 30,
@@ -174,17 +184,36 @@ function S() {
     minSamp:       parseInt  (document.getElementById('minSamp').value)       || 20,
     warmupCycles:  parseInt  (document.getElementById('warmupCycles').value)  ?? 4,
     measCycles:    parseInt  (document.getElementById('measCycles').value)    || 5,
-    get stepMm() { return this.stepCount * this.stepUm / 1000; },
+    tolUmX, tolUmY,
+    get stepMm()  { return this.stepCount * this.stepUm / 1000; },
+    get stepMmX() { return this.stepCountX * this.stepUm / 1000; },
+    get stepMmY() { return this.stepCountY * this.stepUm / 1000; },
+    get tolUm()   { return this.axis==='X' ? this.tolUmX : this.tolUmY; },
   };
 }
 
-function onAxisChange() {
-  updateInfo();
-  if (fileResults.filter(Boolean).length) rerunAll();
-}
 function updateInfo() {
-  const s=S();
-  document.getElementById('stepInfo').innerHTML=`이송거리 <b>${(s.stepMm*1000).toFixed(1)} μm</b>`;
+  const stepUm     = parseFloat(document.getElementById('stepUm').value)     || 0.9817;
+  const stepCountX = parseInt  (document.getElementById('stepCountX').value) || 460;
+  const stepCountY = parseInt  (document.getElementById('stepCountY').value) || 720;
+  const distX = (stepCountX * stepUm).toFixed(1);
+  const distY = (stepCountY * stepUm).toFixed(1);
+
+  document.getElementById('stepInfo').innerHTML=
+    `<span style="color:var(--text3);font-size:10px">`+
+    `X축 ${stepCountX}step × ${stepUm}μm = <b style="color:var(--text2)">${distX}μm</b>`+
+    `&nbsp;&nbsp;Y축 ${stepCountY}step × ${stepUm}μm = <b style="color:var(--text2)">${distY}μm</b>`+
+    `</span>`;
+
+  // 허용오차 입력란 동적 생성 (이송거리 앞에 표시)
+  const sgX = document.getElementById('sgTolX');
+  const sgY = document.getElementById('sgTolY');
+  if(sgX) sgX.innerHTML=
+    `<label>X 허용오차(μm)<br><span style="font-size:9px;color:var(--text3)">${distX} ± ?</span></label>`+
+    `<input type="number" id="tolUmX" value="${document.getElementById('tolUmX')?.value||50}" min="0">`;
+  if(sgY) sgY.innerHTML=
+    `<label>Y 허용오차(μm)<br><span style="font-size:9px;color:var(--text3)">${distY} ± ?</span></label>`+
+    `<input type="number" id="tolUmY" value="${document.getElementById('tolUmY')?.value||50}" min="0">`;
 }
 
 // ── 드래그드롭 & 파일 입력 ──────────────────────────────────
@@ -255,7 +284,8 @@ function handleFiles(files) {
       const pos = parseCSV(text);
       if (!pos) { alert(`${file.name}: 데이터 부족`); return; }
       const nm = file.name.toLowerCase();
-      let axis = document.getElementById('axisSelect').value;
+      // 파일명에서 축 감지, 미감지 시 기본값 Y
+      let axis = 'Y';
       if (/_x_|[\-_]x[\-_]/.test(nm))      axis='X';
       else if (/_y_|[\-_]y[\-_]/.test(nm)) axis='Y';
       const idx = fileResults.length;
@@ -272,10 +302,15 @@ function handleFiles(files) {
 
 // ── 상세 팝업 ────────────────────────────────────────────────
 let devChartInst = null;
+let stChartInst  = null;
 function showModal(idx) {
   const r = fileResults[idx]; if(!r) return;
-  const iso = r._iso; if(!iso) return;
-  const rt  = r._realTargets;
+  const iso      = r._iso;       if(!iso) return;
+  const rt       = r._realTargets;
+  const overSegs = r._overSegs  || [];
+  const tolUm    = r._tolUm     || 50;
+  const timeMs   = r._timeMs;
+  const pos      = r.pos;
   const f   = (v,d=1) => v.toFixed(d);
   const pm  = v => `±${f(v/2)}`;
   const sgn = v => (v>=0?'+':'')+f(v);
@@ -340,6 +375,26 @@ function showModal(idx) {
       </div>
       <div class="modal-body">
 
+        <!-- s-t 그래프 (위치 vs 시간) + 허용오차 초과 구간 강조 -->
+        <div>
+          <div style="font-size:12px;font-weight:700;color:#fff;margin-bottom:4px">위치-시간 그래프 (s-t)</div>
+          <div style="font-size:11px;color:var(--text3);margin-bottom:6px">
+            허용오차 ±${tolUm}μm 초과 구간 강조 표시
+            ${overSegs.length
+              ? `<span style="color:#ffa94d;margin-left:8px">⚠ ${overSegs.length}개 구간 초과</span>`
+              : `<span style="color:var(--green);margin-left:8px">✓ 초과 구간 없음</span>`}
+          </div>
+          <div style="height:220px;position:relative;background:var(--bg2);border-radius:8px;padding:6px">
+            <canvas id="stChart"></canvas>
+          </div>
+          ${overSegs.length ? `
+          <div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:4px">
+            ${overSegs.map(s=>`<span style="font-size:10px;background:rgba(255,167,0,.12);border:1px solid rgba(255,167,0,.3);color:#ffa94d;border-radius:3px;padding:2px 6px">
+              ${s.dir==='down'?'↓':'↑'}${s.cycleNo}회 ${s.from}→${s.to}: ${s.dist}μm (${parseFloat(s.diff)>=0?'+':''}${s.diff}μm)
+            </span>`).join('')}
+          </div>` : ''}
+        </div>
+
         <!-- 편차 차트 -->
         <div>
           <div style="font-size:12px;font-weight:700;color:#fff;margin-bottom:6px">위치 편차 그래프 (ISO 230-2)</div>
@@ -391,6 +446,146 @@ function showModal(idx) {
   </div>`;
 
   document.body.insertAdjacentHTML('beforeend', html);
+
+  // s-t 차트 렌더링
+  requestAnimationFrame(()=>{
+    const stCanvas = document.getElementById('stChart');
+    if(stCanvas && timeMs && pos){
+      if(stChartInst){stChartInst.destroy();stChartInst=null;}
+
+      // raw 다운샘플
+      const step = Math.max(1, Math.floor(pos.length/4000));
+      const rawData = [];
+      for(let i=0;i<pos.length;i+=step) rawData.push({x:timeMs[i],y:pos[i]});
+
+      const stDatasets = [{
+        label:'raw', data:rawData,
+        borderColor:'rgba(75,85,120,0.25)', backgroundColor:'transparent',
+        borderWidth:1, pointRadius:0, tension:0, parsing:false, showLine:true,
+      }];
+
+      // 측정 사이클 라인 — T1~T9 구간: 유채색, T0/T10 경계 구간: 무채색
+      r._cycles.filter(g=>g.isMeas).forEach(g=>{
+        const ci=(g.cycleNo-1)%CC.length;
+        const colMain = g.dir==='up'?CC[ci][0]:CC[ci][1];
+        const colGray = 'rgba(140,148,170,0.45)';
+        const sampStep=Math.max(1,Math.floor((g.endIdx-g.startIdx)/800));
+
+        const lastStop = g.stops[g.stops.length-1];
+        const isBoundaryLast = (g.dir==='down' && lastStop.tNum===10) ||
+                               (g.dir==='up'   && lastStop.tNum===0);
+
+        if(!isBoundaryLast){
+          // 경계 없으면 단순 유채색
+          const data=[];
+          for(let i=g.startIdx;i<=g.endIdx;i+=sampStep) data.push({x:timeMs[i],y:pos[i]});
+          stDatasets.push({
+            label:`${g.dir==='up'?'↑Up':'↓Dn'} ${g.cycleNo}회`,
+            data, borderColor:colMain, backgroundColor:'transparent',
+            borderWidth:1.5, pointRadius:0, tension:0, parsing:false, showLine:true,
+          });
+          return;
+        }
+
+        const boundaryStart = lastStop.start;
+        // 유채색 구간 (T1~T9)
+        const mainData=[];
+        for(let i=g.startIdx;i<=boundaryStart;i+=sampStep) mainData.push({x:timeMs[i],y:pos[i]});
+        if(mainData[mainData.length-1]?.x!==timeMs[boundaryStart])
+          mainData.push({x:timeMs[boundaryStart],y:pos[boundaryStart]});
+        stDatasets.push({
+          label:`${g.dir==='up'?'↑Up':'↓Dn'} ${g.cycleNo}회`,
+          data:mainData, borderColor:colMain, backgroundColor:'transparent',
+          borderWidth:1.5, pointRadius:0, tension:0, parsing:false, showLine:true,
+        });
+        // 무채색 구간 (T0 또는 T10)
+        const grayData=[];
+        for(let i=boundaryStart;i<=g.endIdx;i+=sampStep) grayData.push({x:timeMs[i],y:pos[i]});
+        if(grayData[grayData.length-1]?.x!==timeMs[g.endIdx])
+          grayData.push({x:timeMs[g.endIdx],y:pos[g.endIdx]});
+        stDatasets.push({
+          label:`${g.dir==='up'?'↑Up':'↓Dn'} ${g.cycleNo}회 T0/T10`,
+          data:grayData, borderColor:colGray, backgroundColor:'transparent',
+          borderWidth:1, pointRadius:0, tension:0, parsing:false, showLine:true,
+          borderDash:[3,4],
+        });
+      });
+
+      // 허용오차 초과 구간 배경 플러그인
+      const overPlugin = {
+        id:'overBg',
+        beforeDraw(chart){
+          if(!overSegs.length) return;
+          const {ctx,chartArea,scales}=chart;
+          if(!scales.x||!chartArea) return;
+          ctx.save();
+          overSegs.forEach(seg=>{
+            const x1=scales.x.getPixelForValue(timeMs[seg.startIdx]||0);
+            const x2=scales.x.getPixelForValue(timeMs[seg.endIdx]||0);
+            ctx.fillStyle='rgba(255,167,0,0.12)';
+            ctx.fillRect(Math.min(x1,x2), chartArea.top, Math.abs(x2-x1)||4, chartArea.height);
+            // 구간 테두리
+            ctx.strokeStyle='rgba(255,167,0,0.5)';
+            ctx.lineWidth=1;
+            ctx.beginPath();
+            ctx.moveTo(Math.min(x1,x2), chartArea.top);
+            ctx.lineTo(Math.min(x1,x2), chartArea.bottom);
+            ctx.stroke();
+          });
+          ctx.restore();
+        },
+      };
+
+      // T0/T10 수평선 플러그인 (무채색)
+      const t0t10Lines = {
+        id:'t0t10',
+        afterDraw(chart){
+          const {ctx,chartArea,scales}=chart;
+          if(!scales.y||!chartArea) return;
+          const lines=[
+            {val:rt[0],  label:'T0'},
+            {val:rt[10], label:'T10'},
+          ];
+          ctx.save();
+          lines.forEach(({val,label})=>{
+            const py=scales.y.getPixelForValue(val);
+            if(py<chartArea.top||py>chartArea.bottom) return;
+            ctx.beginPath();
+            ctx.setLineDash([6,5]);
+            ctx.strokeStyle='rgba(140,148,170,0.45)';
+            ctx.lineWidth=1;
+            ctx.moveTo(chartArea.left,py);ctx.lineTo(chartArea.right,py);ctx.stroke();
+            ctx.setLineDash([]);
+            const txt=`${label}(${val.toFixed(3)})`;
+            ctx.font='9px Segoe UI,system-ui,sans-serif';
+            const tw=ctx.measureText(txt).width;
+            ctx.fillStyle='rgba(11,13,20,0.75)';
+            ctx.fillRect(chartArea.left+2,py-6,tw+6,12);
+            ctx.fillStyle='rgba(140,148,170,0.85)';
+            ctx.textAlign='left';ctx.textBaseline='middle';
+            ctx.fillText(txt,chartArea.left+5,py);
+          });
+          ctx.restore();
+        },
+      };
+
+      stChartInst = new Chart(stCanvas.getContext('2d'),{
+        type:'line', data:{datasets:stDatasets},
+        plugins:[overPlugin, t0t10Lines],
+        options:{
+          responsive:true, maintainAspectRatio:false, animation:false,
+          plugins:{legend:{display:false}, tooltip:{enabled:false}},
+          scales:{
+            x:{type:'linear',grid:{color:'rgba(37,40,64,.8)'},
+               ticks:{color:'#8892b0',font:{size:9},maxTicksLimit:10,
+                      callback:v=>v>=1000?(v/1000).toFixed(1)+'s':v+'ms'}},
+            y:{grid:{color:'rgba(37,40,64,.8)'},
+               ticks:{color:'#8892b0',font:{size:9},precision:3}},
+          },
+        },
+      });
+    }
+  });
 
   // 편차 차트 렌더링
   requestAnimationFrame(()=>{
@@ -483,6 +678,7 @@ function toggleDevDs(dsIdx){
 function closeModal(){
   const m=document.getElementById('isoModal'); if(m) m.remove();
   if(devChartInst){devChartInst.destroy();devChartInst=null;}
+  if(stChartInst) {stChartInst.destroy(); stChartInst=null;}
 }
 
 function parseCSV(text) {
@@ -497,8 +693,10 @@ function parseCSV(text) {
 function updCount() {
   const n=fileResults.filter(Boolean).length;
   document.getElementById('fileCount').textContent = n?`${n}개 파일`:'';
-  const btn=document.getElementById('btnExport');
-  if(btn) btn.style.display = n ? '' : 'none';
+  const btnExp=document.getElementById('btnExport');
+  const btnUpd=document.getElementById('btnUpdate');
+  if(btnExp) btnExp.style.display = n ? '' : 'none';
+  if(btnUpd) btnUpd.style.display = n ? '' : 'none';
 }
 
 // ── ISO 230-2:2014 계산 ─────────────────────────────────────
@@ -762,7 +960,7 @@ function detectCycles(stops, t0b, t10b) {
 // ── 카드 렌더링 ──────────────────────────────────────────────
 function renderCard(idx) {
   const r=fileResults[idx]; if(!r) return;
-  const s=S(); s.axis=r.axis; s.stepCount=AXIS[r.axis].stepCount;
+  const s=S(r.axis);  // 파일의 실제 축으로 설정값 가져오기
   const sampMs=s.samplingUs/1000;
   const timeMs=r.pos.map((_,i)=>i*sampMs);
   const stops=detectStops(r.pos,s);
@@ -794,10 +992,36 @@ function renderCard(idx) {
   const cid=`cv_${idx}`, lid=`lg_${idx}`, eid=`er_${idx}`;
 
   const iso = calcISO230(cycles, realTargets);
-  // iso 결과를 fileResults에 저장 (팝업에서 재사용)
   fileResults[idx]._iso = iso;
   fileResults[idx]._realTargets = realTargets;
   fileResults[idx]._cycles = cycles;
+  fileResults[idx]._tolUm = s.tolUm;
+  fileResults[idx]._timeMs = timeMs;
+  fileResults[idx]._stepMm = s.stepMm;
+
+  // ── 허용오차 초과 구간 계산 ────────────────────────────────
+  // 측정 사이클에서 절점간 이동거리가 stepMm ± tolUm 벗어난 구간
+  const tolMm = s.tolUm / 1000;
+  const overSegs = [];
+  cycles.filter(g=>g.isMeas).forEach(g=>{
+    // stops를 이동 순서대로 (tNum 순서로)
+    const ordered = [...g.stops].sort((a,b)=>
+      g.dir==='down' ? b.rep-a.rep : a.rep-b.rep
+    );
+    for(let i=0;i<ordered.length-1;i++){
+      const dist = Math.abs(ordered[i+1].rep - ordered[i].rep);
+      const diff = dist - s.stepMm;  // 기준 대비 차이
+      if(Math.abs(diff) > tolMm){
+        overSegs.push({
+          dir:g.dir, cycleNo:g.cycleNo,
+          from:`T${ordered[i].tNum}`, to:`T${ordered[i+1].tNum}`,
+          dist:(dist*1000).toFixed(1), diff:(diff*1000).toFixed(1),
+          startIdx: ordered[i].end, endIdx: ordered[i+1].start,
+        });
+      }
+    }
+  });
+  fileResults[idx]._overSegs = overSegs;
 
   const div=document.createElement('div');
   div.className='chart-card'; div.id=`card_${idx}`;
@@ -806,7 +1030,7 @@ function renderCard(idx) {
       <div style="min-width:0;overflow:hidden">
         <div class="card-title">${r.filename}</div>
         <div class="card-meta">
-          ${AXIS[r.axis].label} &nbsp;·&nbsp;
+          ${AXIS_LABEL[r.axis]||r.axis} &nbsp;·&nbsp;
           T0&nbsp;<b style="color:var(--text2)">${t0Nom.toFixed(3)}</b>mm
           &nbsp;~&nbsp;
           T10&nbsp;<b style="color:var(--text2)">${t10Nom.toFixed(3)}</b>mm
@@ -819,6 +1043,7 @@ function renderCard(idx) {
           <span style="color:var(--text2)">측정 ${mc}회</span>
         </div>
         ${errMsgs.length ? `<div class="err-bar" id="${eid}">${errMsgs.map(m=>`<span class="err-item">⚠ ${m}</span>`).join('')}</div>` : ''}
+        ${overSegs.length ? `<div class="err-bar"><span class="err-item" style="background:rgba(255,167,0,.12);border-color:rgba(255,167,0,.4);color:#ffa94d">⚠ 허용오차 초과 구간 ${overSegs.length}개 (±${s.tolUm}μm)</span></div>` : `<div style="font-size:10px;color:var(--green);margin-top:3px">✓ 허용오차 초과 구간 없음 (±${s.tolUm}μm)</div>`}
       </div>
       <div class="card-acts">
         <button class="btn btn-o" onclick="resetZoom(${idx})">↺ 줌</button>
@@ -914,6 +1139,7 @@ function buildChart(idx, cid, lid, pos, timeMs, cycles, realTargets) {
       const markerData = [{
         x: timeMs[midIdx], y: pos[midIdx],
         _tname: `T${s.tNum}`,
+        _rep: s.rep,          // 절점 실측 변위값 (mm)
         _cn: g.cycleNo, _dir: g.dir,
       }];
       datasets.push({
@@ -1008,19 +1234,30 @@ function buildChart(idx, cid, lid, pos, timeMs, cycles, realTargets) {
         if(hovered!==found){ hovered=found; chart.draw(); }
         if(!found) return;
         const{ctx}=chart;
-        const txt=found.pt._tname;
+        const line1 = found.pt._tname;
+        const line2 = found.pt._rep!=null ? `${found.pt._rep.toFixed(4)} mm` : '';
         ctx.save();
         ctx.font='bold 11px Segoe UI,system-ui,sans-serif';
-        const tw=ctx.measureText(txt).width;
-        const pad=5, bh=18;
-        const bx=found.px-tw/2-pad, by=found.py-bh-6;
-        ctx.fillStyle='rgba(11,13,20,0.9)';
+        const tw1=ctx.measureText(line1).width;
+        ctx.font='10px Segoe UI,system-ui,sans-serif';
+        const tw2=line2?ctx.measureText(line2).width:0;
+        const tw=Math.max(tw1,tw2);
+        const pad=6, lh=14;
+        const bh = line2 ? lh*2+8 : lh+8;
+        const bx=found.px-tw/2-pad, by=found.py-bh-8;
+        ctx.fillStyle='rgba(11,13,20,0.92)';
         ctx.beginPath();
-        ctx.roundRect(bx, by, tw+pad*2, bh, 3);
+        ctx.roundRect(bx, by, tw+pad*2, bh, 4);
         ctx.fill();
         ctx.fillStyle='#e4e8f5';
         ctx.textAlign='center'; ctx.textBaseline='middle';
-        ctx.fillText(txt, found.px, by+bh/2);
+        ctx.font='bold 11px Segoe UI,system-ui,sans-serif';
+        ctx.fillText(line1, found.px, by+lh/2+4);
+        if(line2){
+          ctx.fillStyle='#8892b0';
+          ctx.font='10px Segoe UI,system-ui,sans-serif';
+          ctx.fillText(line2, found.px, by+lh+lh/2+4);
+        }
         ctx.restore();
       });
       canvas.addEventListener('mouseleave',()=>{ hovered=null; chart.draw(); });
@@ -1062,7 +1299,8 @@ function exportXLSX() {
 
   // ── Sheet1: Raw ────────────────────────────────────────────
   const rawHeader = ['호기','축','회차','케이스','숫자','파일명',
-    'A(μm)','R(μm)','B_bar(μm)','B_max(μm)','Au(μm)','Ru(μm)','Ad(μm)','Rd(μm)','측정일'];
+    'A(μm)','R(μm)','B_bar(μm)','B_max(μm)','Au(μm)','Ru(μm)','Ad(μm)','Rd(μm)',
+    '허용오차초과(개)','측정일'];
 
   const rawData = [rawHeader];
   rows.forEach(r=>{
@@ -1074,14 +1312,14 @@ function exportXLSX() {
       p?`case${p.case}`:'',
       p?p.num:'',
       r.filename,
-      fv(iso.A), fv(iso.R), fv(iso.Bbar), fv(iso.B),
-      fv(iso.Au), fv(iso.Ru), fv(iso.Ad), fv(iso.Rd),
+      fv(iso.A,1), fv(iso.R,1), fv(iso.Bbar,1), fv(iso.B,1),
+      fv(iso.Au,1), fv(iso.Ru,1), fv(iso.Ad,1), fv(iso.Rd,1),
+      (r._overSegs||[]).length,   // 허용오차 초과 구간 수
       today,
     ]);
   });
   const wsRaw = XLSX.utils.aoa_to_sheet(rawData);
-  // 열 너비 설정
-  wsRaw['!cols'] = [6,4,6,8,4,24,9,9,9,9,9,9,9,9,12].map(w=>({wch:w}));
+  wsRaw['!cols'] = [6,4,6,8,4,24,9,9,9,9,9,9,9,9,10,12].map(w=>({wch:w}));
 
   // ── Sheet2: Summary (케이스별 평균 + 범위) ─────────────────
   // 데이터에서 고유 키 추출
@@ -1098,46 +1336,46 @@ function exportXLSX() {
   keys.sort((a,b)=>a.hogi-b.hogi||a.axis.localeCompare(b.axis)||a.hocha.localeCompare(b.hocha)||a.case-b.case);
 
   // ── Summary 항목: A, R, B_bar만 (avg + range) ──────────────
-  // Raw 시트 열 인덱스 (0-based): G=6(A), H=7(R), I=8(B_bar)
+  // Raw 시트 열 인덱스 (0-based): G=6(A), H=7(R), I=8(B_bar), O=14(허용오차초과)
   const sumMetrics = [
     {key:'A',    label:'A(μm)',     rawCol:'G'},
     {key:'R',    label:'R(μm)',     rawCol:'H'},
     {key:'Bbar', label:'B_bar(μm)', rawCol:'I'},
   ];
 
-  // Summary 헤더: 호기,축,회차,케이스,n, [A_avg,A_range, R_avg,R_range, B_bar_avg,B_bar_range]
+  // Summary 헤더
   const sumHeader=['호기','축','회차','케이스','n',
-    ...sumMetrics.flatMap(m=>[`${m.label}_avg`,`${m.label}_range`])];
+    ...sumMetrics.flatMap(m=>[`${m.label}_avg`,`${m.label}_range(max-min)`]),
+    '허용오차초과_avg'];
   const sumData=[sumHeader];
 
-  // Raw 시트는 2행부터 시작 (1행=헤더)
-  // 수식: AVERAGEIFS(Raw!G:G, Raw!A:A, 호기, Raw!B:B, 축, Raw!C:C, 회차, Raw!D:D, 케이스)
-  // MAXIFS - MINIFS = range
   keys.forEach((k, ki)=>{
-    const dataRow = ki + 2; // Summary 데이터 시작행 (2행~)
     const hogi    = k.hogi;
     const axis    = k.axis;
     const hocha   = k.hocha;
     const caseLbl = `case${k.case}`;
+    const crit    = `Raw!A:A,${hogi},Raw!B:B,"${axis}",Raw!C:C,"${hocha}",Raw!D:D,"${caseLbl}"`;
 
     const row = [hogi, axis, hocha, caseLbl,
-      // n: COUNTIFS
-      {f:`COUNTIFS(Raw!A:A,${hogi},Raw!B:B,"${axis}",Raw!C:C,"${hocha}",Raw!D:D,"${caseLbl}")`},
+      {f:`COUNTIFS(${crit})`},
     ];
 
     sumMetrics.forEach(m=>{
       const col = m.rawCol;
-      const crit = `Raw!A:A,${hogi},Raw!B:B,"${axis}",Raw!C:C,"${hocha}",Raw!D:D,"${caseLbl}"`;
       row.push(
-        {f:`IFERROR(AVERAGEIFS(Raw!${col}:${col},${crit}),"")`},   // avg
-        {f:`IFERROR(MAXIFS(Raw!${col}:${col},${crit})-MINIFS(Raw!${col}:${col},${crit}),"")`}, // range
+        {f:`IFERROR(ROUND(AVERAGEIFS(Raw!${col}:${col},${crit}),1),"")`},
+        {f:`IFERROR(ROUND(MAXIFS(Raw!${col}:${col},${crit})-MINIFS(Raw!${col}:${col},${crit}),1),"")`},
       );
     });
+
+    // 허용오차초과 평균 (O열 = Raw 15번째 컬럼)
+    row.push({f:`IFERROR(ROUND(AVERAGEIFS(Raw!O:O,${crit}),1),"")`});
+
     sumData.push(row);
   });
 
   const wsSum = XLSX.utils.aoa_to_sheet(sumData);
-  wsSum['!cols']=[6,4,6,8,4,...Array(sumMetrics.length*2).fill(12)].map(w=>({wch:w}));
+  wsSum['!cols']=[6,4,6,8,4,...Array(sumMetrics.length*2).fill(12),14].map(w=>({wch:w}));
 
   // ── Sheet3: Trend — 동일 6개 항목만 ──────────────────────────
   const hochaList=[...new Set(rows.map(r=>{const p=parseName(r.filename);return p?p.hochaStr:null}).filter(Boolean))].sort();
@@ -1163,11 +1401,11 @@ function exportXLSX() {
         });
         if(!group.length){rowAvg.push('');return;}
         const vals=group.map(r=>r._iso[m.key]).filter(v=>v!=null);
-        rowAvg.push(vals.length?fv(vals.reduce((a,b)=>a+b)/vals.length):'');
+        rowAvg.push(vals.length?fv(vals.reduce((a,b)=>a+b)/vals.length,1):'');
       });
       trendData.push(rowAvg);
-      // range 행
-      const rowRange=[ck.hogi, ck.axis, `case${ck.case}`, `${m.label}_range`];
+      // range(max-min) 행
+      const rowRange=[ck.hogi, ck.axis, `case${ck.case}`, `${m.label}_range(max-min)`];
       hochaList.forEach(hocha=>{
         const group=rows.filter(r=>{
           const p=parseName(r.filename);
@@ -1175,7 +1413,7 @@ function exportXLSX() {
         });
         if(!group.length){rowRange.push('');return;}
         const vals=group.map(r=>r._iso[m.key]).filter(v=>v!=null);
-        rowRange.push(vals.length?fv(Math.max(...vals)-Math.min(...vals)):'');
+        rowRange.push(vals.length?fv(Math.max(...vals)-Math.min(...vals),1):'');
       });
       trendData.push(rowRange);
     });
