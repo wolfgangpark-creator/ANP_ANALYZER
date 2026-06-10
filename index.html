@@ -84,6 +84,20 @@ body{background:var(--bg);color:var(--text1);font-family:'Segoe UI',system-ui,sa
 .modal-body{overflow-y:auto;padding:16px 20px;display:flex;flex-direction:column;gap:14px}
 .modal-close{background:none;border:none;color:var(--text3);font-size:18px;cursor:pointer;line-height:1;padding:2px 6px}
 .modal-close:hover{color:#fff}
+/* 매뉴얼 전용 */
+.man-body{overflow-y:auto;padding:24px 28px;display:flex;flex-direction:column;gap:0;line-height:1.7;font-size:13px;color:var(--text2)}
+.man-h1{font-size:18px;font-weight:800;color:#fff;margin:0 0 4px}
+.man-ver{font-size:11px;color:var(--text3);margin-bottom:24px}
+.man-h2{font-size:14px;font-weight:700;color:#4dabf7;margin:28px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--border)}
+.man-h3{font-size:12px;font-weight:700;color:var(--text1);margin:14px 0 6px}
+.man-p{margin:0 0 8px;color:var(--text2)}
+.man-table{width:100%;border-collapse:collapse;font-size:12px;margin:8px 0 12px}
+.man-table th{background:var(--bg3);color:var(--text3);padding:6px 10px;text-align:left;border-bottom:1px solid var(--border);font-weight:600;white-space:nowrap}
+.man-table td{padding:6px 10px;border-bottom:1px solid rgba(37,40,64,.5);color:var(--text2);vertical-align:top}
+.man-table td:first-child{color:var(--text1);font-weight:600;white-space:nowrap}
+.man-code{background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:10px 14px;font-family:monospace;font-size:11px;color:#a9e34b;margin:6px 0 12px;white-space:pre-wrap}
+.man-tip{background:rgba(74,171,247,0.08);border-left:3px solid #4dabf7;padding:8px 12px;border-radius:0 6px 6px 0;margin:8px 0;font-size:12px;color:var(--text2)}
+.man-warn{background:rgba(255,107,107,0.08);border-left:3px solid var(--red);padding:8px 12px;border-radius:0 6px 6px 0;margin:8px 0;font-size:12px;color:var(--text2)}
 /* 편차 차트 */
 .dev-chart-wrap{height:200px;position:relative;background:var(--bg2);border-radius:8px;padding:8px}
 /* 측정값 테이블 */
@@ -105,10 +119,11 @@ body{background:var(--bg);color:var(--text1);font-family:'Segoe UI',system-ui,sa
 <body>
 
 <div class="header">
-  <div class="logo"><span class="s">Noul multy</span> <span class="a">A&amp;P Analyzer</span><span class="v">v1.4.03_20260610</span></div>
+  <div class="logo"><span class="s">Noul multy</span> <span class="a">A&amp;P Analyzer</span><span class="v">v1.4.04_20260610</span></div>
   <div class="header-right">
     <span class="file-count" id="fileCount"></span>
     <button class="btn btn-o" onclick="exportXLSX()" id="btnExport" style="display:none">⬇ xlsx 내보내기</button>
+    <button class="btn" onclick="showManual()" style="background:rgba(74,171,247,0.15);border-color:rgba(74,171,247,0.4);color:#4dabf7">📖 사용자매뉴얼</button>
     <button class="btn btn-o" onclick="resetAll()">↺ 초기화</button>
   </div>
 </div>
@@ -328,7 +343,152 @@ function handleFiles(files) {
   }).catch(err => alert(`파일 읽기 실패: ${err?.message || err}`));
 }
 
-// ── 상세 팝업 ────────────────────────────────────────────────
+// ── 사용자 매뉴얼 팝업 ──────────────────────────────────────
+function showManual() {
+  const html = `
+  <div class="modal-bg" id="manualModal" onclick="if(event.target===this)closeManual()">
+    <div class="modal" style="width:min(820px,96vw)">
+      <div class="modal-hdr">
+        <div>
+          <div class="modal-title">📖 사용자 매뉴얼</div>
+          <div class="modal-sub">Noul multy A&amp;P Analyzer · v1.4.03</div>
+        </div>
+        <button class="modal-close" onclick="closeManual()">✕</button>
+      </div>
+      <div class="man-body">
+
+        <div class="man-h1">Noul multy A&amp;P Analyzer</div>
+        <div class="man-ver">v1.4.03_20260610 &nbsp;·&nbsp; ISO 230-2:2014 기반 이송정밀도 분석 프로그램</div>
+
+        <!-- 1. 개요 -->
+        <div class="man-h2">1. 프로그램 개요</div>
+        <p class="man-p">CSV 형식의 위치 로그 파일을 읽어 ISO 230-2:2014 기준에 따라 이송정밀도(A), 반복정도(R), 백래시(B̄)를 자동 계산하고 시각화합니다. X/Y/Z 축을 지원하며 최대 200개 파일을 동시에 분석할 수 있습니다.</p>
+
+        <div class="man-tip">웜업 사이클을 제외한 <b>측정 사이클</b>의 데이터만 ISO 230-2 계산에 사용됩니다.</div>
+
+        <!-- 2. 파일 형식 -->
+        <div class="man-h2">2. 지원 파일 형식</div>
+        <div class="man-h3">2.1 파일명 규칙</div>
+        <div class="man-code">{호기}_{축}_{회차}-c{케이스}-{숫자}.csv
+
+예시:
+  1_x_0K-c1-1.csv   → 1호기, X축, 0K회차, 케이스1, 1번째
+  2_y_5K-c2-3.csv   → 2호기, Y축, 5K회차, 케이스2, 3번째
+  1_z_10K-c1-2.csv  → 1호기, Z축, 10K회차, 케이스1, 2번째</div>
+        <div class="man-h3">2.2 CSV 구조</div>
+        <table class="man-table">
+          <tr><th>행</th><th>내용</th></tr>
+          <tr><td>1~4행</td><td>헤더 (기본값 4행, 설정에서 변경 가능)</td></tr>
+          <tr><td>5행~</td><td>위치 데이터 (mm 단위, 첫 번째 컬럼)</td></tr>
+        </table>
+
+        <!-- 3. 파일 정렬 -->
+        <div class="man-h2">3. 파일 정렬 순서</div>
+        <p class="man-p">파일 로드 시 자동으로 아래 우선순위로 정렬됩니다.</p>
+        <div class="man-code">호기(오름차순) → 축(X→Y→Z) → 회차(오름차순) → 케이스(오름차순) → 숫자(오름차순)</div>
+
+        <!-- 4. 설정 -->
+        <div class="man-h2">4. 설정 항목</div>
+        <table class="man-table">
+          <tr><th>항목</th><th>기본값</th><th>설명</th></tr>
+          <tr><td>샘플링(μsec)</td><td>1000</td><td>데이터 샘플링 간격</td></tr>
+          <tr><td>헤더 행 수</td><td>4</td><td>CSV 파일 상단 헤더 행 수</td></tr>
+          <tr><td>정지창(ms)</td><td>30</td><td>정지 판단 슬라이딩 윈도우 크기</td></tr>
+          <tr><td>최소샘플</td><td>20</td><td>정지 구간으로 인정하는 최소 샘플 수</td></tr>
+          <tr><td>웜업 사이클</td><td>4</td><td>초기 웜업 구간 (무채색 표시, 연산 제외)</td></tr>
+          <tr><td>측정 사이클</td><td>5</td><td>ISO 계산에 사용할 측정 구간 수</td></tr>
+          <tr><td>X/Y 정지변화(μm)</td><td>100</td><td>X/Y축 정지 판단 임계값</td></tr>
+          <tr><td>X/Y 1step(μm)</td><td>0.9817</td><td>X/Y축 모터 1스텝당 이동거리</td></tr>
+          <tr><td>X축 스텝</td><td>460</td><td>X축 측정 스텝 수</td></tr>
+          <tr><td>Y축 스텝</td><td>720</td><td>Y축 측정 스텝 수</td></tr>
+          <tr><td>Z 정지변화(μm)</td><td>20</td><td>Z축 정지 판단 임계값 (Z는 이동량이 작아 별도 설정)</td></tr>
+          <tr><td>Z 1step(μm)</td><td>0.004883</td><td>Z축 1스텝당 이동거리 (= 0.25mm ÷ 51200)</td></tr>
+          <tr><td>Z축 스텝</td><td>7000</td><td>Z축 측정 스텝 수</td></tr>
+          <tr><td>X/Y/Z 허용오차(μm)</td><td>50/50/10</td><td>절점 간 이동거리 허용 오차</td></tr>
+        </table>
+        <div class="man-tip"><b>↻ 설정 업데이트</b> 버튼: 파일 로드 후 설정값을 변경했을 때 클릭하면 모든 카드를 재계산합니다.</div>
+
+        <!-- 5. 절점 구조 -->
+        <div class="man-h2">5. 절점(Target) 구조</div>
+        <table class="man-table">
+          <tr><th>항목</th><th>X/Y축</th><th>Z축</th></tr>
+          <tr><td>사이클당 stop 수</td><td>10개</td><td>11개</td></tr>
+          <tr><td>절점 범위</td><td>T0 ~ T10</td><td>T0 ~ T11</td></tr>
+          <tr><td>Down 배정</td><td>T1 ~ T10</td><td>T1 ~ T11</td></tr>
+          <tr><td>Up 배정</td><td>T9 ~ T0</td><td>T10 ~ T0</td></tr>
+          <tr><td>무채색 경계</td><td>Down 마지막(T10), Up 마지막(T0)</td><td>Down 마지막(T11), Up 마지막(T0)</td></tr>
+          <tr><td>ISO 연산 범위</td><td>T1 ~ T9</td><td>T1 ~ T10</td></tr>
+        </table>
+        <div class="man-tip">기준 T0 = Up 사이클 마지막 정착값 평균. T1~TN = T0 - k × stepMm 등간격.</div>
+
+        <!-- 6. 그래프 -->
+        <div class="man-h2">6. 그래프 표시</div>
+        <table class="man-table">
+          <tr><th>표시</th><th>의미</th></tr>
+          <tr><td>유채색 실선 (굵음)</td><td>측정 사이클 이동 구간</td></tr>
+          <tr><td>무채색 얇은 실선</td><td>웜업 사이클</td></tr>
+          <tr><td>무채색 점선</td><td>T0/T(last) 경계 구간</td></tr>
+          <tr><td>수평 점선</td><td>기준 절점 위치 (T0~TN)</td></tr>
+          <tr><td>색깔 점 (마커)</td><td>측정 사이클의 절점 정착 위치</td></tr>
+          <tr><td>흰 테두리 점</td><td>경계 절점 (T0, TN) 마커</td></tr>
+        </table>
+        <div class="man-tip">마커에 마우스를 올리면 절점 이름(T1)과 실측 변위값(mm)이 표시됩니다.<br>드래그로 확대, 더블클릭으로 초기화합니다.</div>
+
+        <!-- 7. ISO 결과 패널 -->
+        <div class="man-h2">7. ISO 230-2 결과 패널</div>
+        <p class="man-p">각 카드 왼쪽에 표시됩니다. 패널을 클릭하면 상세 데이터 팝업이 열립니다.</p>
+        <table class="man-table">
+          <tr><th>항목</th><th>공식</th><th>설명</th></tr>
+          <tr><td>ACCURACY (A)</td><td>3.27: max(x̄+2s) - min(x̄-2s)</td><td>양방향 정확정밀도. ±A/2로 표시</td></tr>
+          <tr><td>REPEATABILITY (R)</td><td>3.20: max(2s↑+2s↓+|Bᵢ|, 4s↑, 4s↓)</td><td>양방향 반복정도. ±R/2로 표시</td></tr>
+          <tr><td>Hysteresis (B̄)</td><td>3.17: ΣBᵢ/m</td><td>평균 반전값</td></tr>
+          <tr><td>A↑/A↓</td><td>3.26</td><td>단방향 정확정밀도</td></tr>
+          <tr><td>R↑/R↓</td><td>3.19: 4s↑, 4s↓</td><td>단방향 반복정도</td></tr>
+        </table>
+
+        <!-- 8. 허용오차 초과 표시 -->
+        <div class="man-h2">8. 허용오차 초과 구간</div>
+        <p class="man-p">설정한 허용오차를 벗어난 절점 간 이동거리가 카드 하단에 표시됩니다.</p>
+        <div class="man-code">이동거리 = |절점(k+1) rep - 절점(k) rep|
+허용 범위 = stepMm ± tolUm(mm)
+초과 시 → 카드에 ⚠ 표시, 상세 팝업 s-t 그래프에 주황 배경 강조</div>
+
+        <!-- 9. xlsx 내보내기 -->
+        <div class="man-h2">9. xlsx 내보내기</div>
+        <p class="man-p">분석 완료 후 헤더의 <b>⬇ xlsx 내보내기</b> 버튼을 클릭합니다. 회차별로 시트가 자동 분리됩니다.</p>
+        <table class="man-table">
+          <tr><th>시트명</th><th>내용</th></tr>
+          <tr><td>Raw_0K</td><td>0K 회차 원본 측정값 (호기, 축, 케이스, A/R/B 등)</td></tr>
+          <tr><td>Summary_0K</td><td>케이스별 평균/범위 (AVERAGEIFS/MAXIFS-MINIFS 수식, 자동 갱신)</td></tr>
+          <tr><td>Raw_5K, Summary_5K</td><td>5K 회차 동일 구조 (회차 데이터 추가 시 자동 생성)</td></tr>
+        </table>
+        <table class="man-table">
+          <tr><th>Raw 시트 컬럼</th><th>설명</th></tr>
+          <tr><td>호기, 축, 회차, 케이스, 숫자</td><td>파일명에서 자동 파싱</td></tr>
+          <tr><td>A(μm), R(μm), B_bar(μm), B_max(μm)</td><td>ISO 230-2 주요 지표</td></tr>
+          <tr><td>Au, Ru, Ad, Rd</td><td>단방향 정확정밀도/반복정도</td></tr>
+          <tr><td>허용오차초과(개)</td><td>허용 범위 초과 구간 수</td></tr>
+        </table>
+        <div class="man-tip">Summary 시트는 <b>Excel 수식</b>으로 작성되어 Raw 시트에 데이터를 추가하면 자동으로 재계산됩니다.<br>range(max-min)은 같은 케이스 3회 측정값의 산포(전체 폭)를 의미합니다.</div>
+
+        <!-- 10. 주의사항 -->
+        <div class="man-h2">10. 주의사항</div>
+        <div class="man-warn">파일명이 규칙({호기}_{축}_{회차}-c{케이스}-{숫자})과 다르면 정렬이 적용되지 않습니다.</div>
+        <div class="man-warn">설정값(스텝 수, 1step 거리 등)이 실제 하드웨어와 다르면 ISO 계산값이 부정확합니다.</div>
+        <div class="man-tip">최대 200개 파일 동시 로드 가능. 파일 수가 많을수록 초기 로딩 시간이 길어집니다.</div>
+
+        <div style="height:20px"></div>
+      </div>
+    </div>
+  </div>`;
+  document.body.insertAdjacentHTML('beforeend', html);
+}
+function closeManual(){
+  const m=document.getElementById('manualModal');
+  if(m) m.remove();
+}
+
+
 let devChartInst = null;
 let stChartInst  = null;
 function showModal(idx) {
