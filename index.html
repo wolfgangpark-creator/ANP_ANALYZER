@@ -119,7 +119,7 @@ body{background:var(--bg);color:var(--text1);font-family:'Segoe UI',system-ui,sa
 <body>
 
 <div class="header">
-  <div class="logo"><span class="s">Noul multy</span> <span class="a">A&amp;P Analyzer</span><span class="v">v1.4.04_20260610</span></div>
+  <div class="logo"><span class="s">Noul multy</span> <span class="a">A&amp;P Analyzer</span><span class="v">v1.4.05_20260610</span></div>
   <div class="header-right">
     <span class="file-count" id="fileCount"></span>
     <button class="btn btn-o" onclick="exportXLSX()" id="btnExport" style="display:none">⬇ xlsx 내보내기</button>
@@ -1517,12 +1517,16 @@ function exportXLSX() {
     '허용오차초과(개)','측정일'];
 
   const sumMetrics = [
-    {key:'A',    label:'A(μm)',     rawCol:'G'},
-    {key:'R',    label:'R(μm)',     rawCol:'H'},
-    {key:'Bbar', label:'B_bar(μm)', rawCol:'I'},
+    {key:'A',    label:'A(μm)',     rawCol:'G', half:true},   // ±A/2
+    {key:'R',    label:'R(μm)',     rawCol:'H', half:true},   // ±R/2
+    {key:'Bbar', label:'B_bar(μm)', rawCol:'I', half:false},  // B_bar 그대로
   ];
   const sumHeader = ['호기','축','회차','케이스','n',
-    ...sumMetrics.flatMap(m=>[`${m.label}_avg`,`${m.label}_range(max-min)`]),
+    ...sumMetrics.flatMap(m=>
+      m.half
+        ? [`±${m.label}_avg(/2)`, `${m.label}_range(max-min)`]
+        : [`${m.label}_avg`,      `${m.label}_range(max-min)`]
+    ),
     '허용오차초과_avg'];
 
   // ── 스타일 적용 함수 ────────────────────────────────────────
@@ -1599,8 +1603,11 @@ function exportXLSX() {
       ];
       sumMetrics.forEach(m=>{
         const col = m.rawCol;
+        const avgFormula = m.half
+          ? `IFERROR(ROUND(AVERAGEIFS('${rawShName}'!${col}:${col},${crit})/2,1),"")`
+          : `IFERROR(ROUND(AVERAGEIFS('${rawShName}'!${col}:${col},${crit}),1),"")`;
         row.push(
-          {f:`IFERROR(ROUND(AVERAGEIFS('${rawShName}'!${col}:${col},${crit}),1),"")`},
+          {f: avgFormula},
           {f:`IFERROR(ROUND(MAXIFS('${rawShName}'!${col}:${col},${crit})-MINIFS('${rawShName}'!${col}:${col},${crit}),1),"")`},
         );
       });
